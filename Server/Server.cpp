@@ -82,7 +82,7 @@ int  main() {
 		while (true) {
 			ZeroMemory(buf, 4096);
 
-			int byteReceived = recv(clientSocket, buf, 4096, 0) + 1;
+			int byteReceived = recv(clientSocket, buf, 4096, 0);
 			if (byteReceived == SOCKET_ERROR) {
 				cerr << "Error in recv(). Quitting" << endl;
 				break;
@@ -92,25 +92,42 @@ int  main() {
 				cout << "Client is disconnected!" << endl;
 				break;
 			}
-
+			cout << buf << endl;
 			Vector2i position;
 			if (buf[0] == 'P')
 			{
-				if (buf[1] == '-')
+				if (int(buf[1]) - '0' == zone::painterList::CIRCLE)
 				{
-					painter = -1;
-					position = Vector2i(int(buf[4]) - '0', int(buf[6]) - '0');
+					if (int(buf[1]) - '0' == painter)
+					{
+						position = Vector2i(int(buf[3]) - '0', int(buf[5]) - '0');
+						userInput = "P" + to_string(painter) + "X" + to_string(position.x) + "Y" + to_string(position.y);
+						zones[position.x + position.y * 3].painter = painter;
+						send(clientSocket, userInput.c_str(), userInput.size() + 1, 0);
+					}
+					else
+					{
+						send(clientSocket, "N1", 2, 0);
+						cout << "N1" << endl;
+					}
 				}
 				else
 				{
-					painter = 1;
-					position = Vector2i(int(buf[3]) - '0', int(buf[5]) - '0');
+					if (int(buf[1]) - '0' == painter)
+					{
+						position = Vector2i(int(buf[3]) - '0', int(buf[5]) - '0');
+						userInput = "P" + to_string(painter) + "X" + to_string(position.x) + "Y" + to_string(position.y);
+						zones[position.x + position.y * 3].painter = painter;
+						send(clientSocket, userInput.c_str(), userInput.size() + 1, 0);
+					}
+					else
+					{
+						send(clientSocket, "N2", 2, 0);
+						cout << "N2" << endl;
+					}
 				}
-				userInput = "P" + to_string(painter) + "X" + to_string(position.x) + "Y" + to_string(position.y);
-				zones[position.x + position.y * 3].painter = painter;
 			}
 
-			send(clientSocket, userInput.c_str(), userInput.size() + 1, 0);
 			// 0 1 2
 			// 3 4 5
 			// 6 7 8
@@ -127,17 +144,28 @@ int  main() {
 				winner = painter;
 			}
 
-			if (winner == -1)
+			if (winner == zone::painterList::CIRCLE)
 			{
 				send(clientSocket, "W1", 3, 0);
+				cout << "W1" << endl;
 			}
-			else if (winner == 1)
+			else if (winner == zone::painterList::CROSS)
 			{
 				send(clientSocket, "W2", 3, 0);
+				cout << "W2" << endl;
 			}
 
-			// message back to client!
-			//send(clientSocket, buf, byteReceived + 1, 0);
+			if (int(buf[1]) - '0' == painter)
+			{
+				if (painter == zone::painterList::CIRCLE)
+				{
+					painter = zone::painterList::CROSS;
+				}
+				else
+				{
+					painter = zone::painterList::CIRCLE;
+				}
+			}
 		}
 
 		closesocket(clientSocket);
