@@ -96,74 +96,56 @@ int  main() {
 			Vector2i position;
 			if (buf[0] == 'P')
 			{
-				if (int(buf[1]) - '0' == zone::painterList::CIRCLE)
+				if (int(buf[1]) - '0' == painter)
 				{
+					position = Vector2i(int(buf[3]) - '0', int(buf[5]) - '0');
+					userInput = "P" + to_string(painter) + "X" + to_string(position.x) + "Y" + to_string(position.y);
+					zones[position.x + position.y * 3].painter = painter;
+					send(clientSocket, userInput.c_str(), userInput.size() + 1, 0);
+					
+					// 0 1 2
+					// 3 4 5
+					// 6 7 8
+					// 0,1,2  3,4,5  6,7,8  0,3,6  1,4,7  2,5,8  0,4,8  2,4,6
+					if ((zones[0].painter != 0 && zones[0].painter == zones[1].painter && zones[0].painter == zones[2].painter) ||
+						(zones[3].painter != 0 && zones[3].painter == zones[4].painter && zones[3].painter == zones[5].painter) ||
+						(zones[6].painter != 0 && zones[6].painter == zones[7].painter && zones[6].painter == zones[8].painter) ||
+						(zones[0].painter != 0 && zones[0].painter == zones[3].painter && zones[0].painter == zones[6].painter) ||
+						(zones[1].painter != 0 && zones[1].painter == zones[4].painter && zones[1].painter == zones[7].painter) ||
+						(zones[2].painter != 0 && zones[2].painter == zones[5].painter && zones[2].painter == zones[8].painter) ||
+						(zones[0].painter != 0 && zones[0].painter == zones[4].painter && zones[0].painter == zones[8].painter) ||
+						(zones[2].painter != 0 && zones[2].painter == zones[4].painter && zones[2].painter == zones[6].painter))
+					{
+						winner = painter;
+					}
+
+					if (winner == zone::painterList::CIRCLE)
+					{
+						send(clientSocket, "W1", 3, 0);
+						cout << "W1" << endl;
+					}
+					else if (winner == zone::painterList::CROSS)
+					{
+						send(clientSocket, "W2", 3, 0);
+						cout << "W2" << endl;
+					}
+
 					if (int(buf[1]) - '0' == painter)
 					{
-						position = Vector2i(int(buf[3]) - '0', int(buf[5]) - '0');
-						userInput = "P" + to_string(painter) + "X" + to_string(position.x) + "Y" + to_string(position.y);
-						zones[position.x + position.y * 3].painter = painter;
-						send(clientSocket, userInput.c_str(), userInput.size() + 1, 0);
-					}
-					else
-					{
-						send(clientSocket, "N1", 2, 0);
-						cout << "N1" << endl;
+						if (painter == zone::painterList::CIRCLE)
+						{
+							painter = zone::painterList::CROSS;
+						}
+						else
+						{
+							painter = zone::painterList::CIRCLE;
+						}
 					}
 				}
 				else
 				{
-					if (int(buf[1]) - '0' == painter)
-					{
-						position = Vector2i(int(buf[3]) - '0', int(buf[5]) - '0');
-						userInput = "P" + to_string(painter) + "X" + to_string(position.x) + "Y" + to_string(position.y);
-						zones[position.x + position.y * 3].painter = painter;
-						send(clientSocket, userInput.c_str(), userInput.size() + 1, 0);
-					}
-					else
-					{
-						send(clientSocket, "N2", 2, 0);
-						cout << "N2" << endl;
-					}
-				}
-			}
-
-			// 0 1 2
-			// 3 4 5
-			// 6 7 8
-			// 0,1,2  3,4,5  6,7,8  0,3,6  1,4,7  2,5,8  0,4,8  2,4,6
-			if ((zones[0].painter != 0 && zones[0].painter == zones[1].painter && zones[0].painter == zones[2].painter) ||
-				(zones[3].painter != 0 && zones[3].painter == zones[4].painter && zones[3].painter == zones[5].painter) ||
-				(zones[6].painter != 0 && zones[6].painter == zones[7].painter && zones[6].painter == zones[8].painter) ||
-				(zones[0].painter != 0 && zones[0].painter == zones[3].painter && zones[0].painter == zones[6].painter) ||
-				(zones[1].painter != 0 && zones[1].painter == zones[4].painter && zones[1].painter == zones[7].painter) ||
-				(zones[2].painter != 0 && zones[2].painter == zones[5].painter && zones[2].painter == zones[8].painter) ||
-				(zones[0].painter != 0 && zones[0].painter == zones[4].painter && zones[0].painter == zones[8].painter) ||
-				(zones[2].painter != 0 && zones[2].painter == zones[4].painter && zones[2].painter == zones[6].painter))
-			{
-				winner = painter;
-			}
-
-			if (winner == zone::painterList::CIRCLE)
-			{
-				send(clientSocket, "W1", 3, 0);
-				cout << "W1" << endl;
-			}
-			else if (winner == zone::painterList::CROSS)
-			{
-				send(clientSocket, "W2", 3, 0);
-				cout << "W2" << endl;
-			}
-
-			if (int(buf[1]) - '0' == painter)
-			{
-				if (painter == zone::painterList::CIRCLE)
-				{
-					painter = zone::painterList::CROSS;
-				}
-				else
-				{
-					painter = zone::painterList::CIRCLE;
+					send(clientSocket, 'N' + to_string(painter).c_str(), 2, 0);
+					cout << "N" + to_string(painter) << endl;
 				}
 			}
 		}
