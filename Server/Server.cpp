@@ -4,7 +4,6 @@
 #include <vector>
 #include <WS2tcpip.h>
 #pragma comment (lib, "ws2_32.lib")
-
 using namespace std;
 
 int  main() {
@@ -15,7 +14,7 @@ int  main() {
 	{
 		for (int i = 0; i < 3; i++)
 		{
-			zone newZone(Vector2i(i * 300, j * 300));
+			zone newZone(Vector2i(i, j));
 			zones.push_back(newZone);
 		}
 	}
@@ -130,16 +129,13 @@ int  main() {
 						cout << "W2" << endl;
 					}
 
-					if (int(buf[1]) - '0' == painter)
+					if (painter == zone::painterList::CIRCLE)
 					{
-						if (painter == zone::painterList::CIRCLE)
-						{
-							painter = zone::painterList::CROSS;
-						}
-						else
-						{
-							painter = zone::painterList::CIRCLE;
-						}
+						painter = zone::painterList::CROSS;
+					}
+					else
+					{
+						painter = zone::painterList::CIRCLE;
 					}
 				}
 				else
@@ -147,6 +143,20 @@ int  main() {
 					send(clientSocket, 'N' + to_string(painter).c_str(), 2, 0);
 					cout << "N" + to_string(painter) << endl;
 				}
+			}
+			if (buf[0] == 'S')
+			{
+				userInput = "S";
+
+				for (int j = 0; j < 3; j++)
+				{
+					for (int i = 0; i < 3; i++)
+					{
+						userInput += to_string(zones[i + j * 3].painter) + "X" + to_string(zones[i + j * 3].coordinates.x) + "Y" + to_string(zones[i + j * 3].coordinates.y);
+					}
+				}
+				send(clientSocket, userInput.c_str(), userInput.size(), 0);
+				cout << userInput << endl;
 			}
 		}
 
