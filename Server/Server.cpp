@@ -5,7 +5,6 @@
 #include <WS2tcpip.h>
 #include <thread>
 #pragma comment (lib, "ws2_32.lib")
-
 using namespace std;
 
 struct ClientData {
@@ -27,7 +26,7 @@ bool initializeServer(SOCKET& listeningSocket, sockaddr_in& hint, int port) {
 		return false;
 	}
 
-	// Création du socket
+	// Crï¿½ation du socket
 	listeningSocket = socket(AF_INET, SOCK_STREAM, 0);
 	if (listeningSocket == INVALID_SOCKET) {
 		cerr << "Can't create a socket! Quitting..." << endl;
@@ -48,7 +47,7 @@ bool initializeServer(SOCKET& listeningSocket, sockaddr_in& hint, int port) {
 		return false;
 	}
 
-	// Mise en écoute du socket
+	// Mise en ï¿½coute du socket
 	if (listen(listeningSocket, SOMAXCONN) == SOCKET_ERROR) {
 		cerr << "Can't listen on socket! Quitting..." << endl;
 		closesocket(listeningSocket);
@@ -61,8 +60,8 @@ bool initializeServer(SOCKET& listeningSocket, sockaddr_in& hint, int port) {
 }
 
 void checkWinner(vector<zone>& zones, int& winner, SOCKET clientSocket) {
-	// Vérification du gagnant selon les règles du jeu
-	// Vérifiez si l'une des combinaisons gagnantes est remplie
+	// Vï¿½rification du gagnant selon les rï¿½gles du jeu
+	// Vï¿½rifiez si l'une des combinaisons gagnantes est remplie
 
 	// 0 1 2
 	// 3 4 5
@@ -127,10 +126,10 @@ void handleMove(ClientData& clientData, char* buf) {
 			zones[position.x + position.y * 3].painter = painter;
 			send(clientSocket, userInput.c_str(), userInput.size() + 1, 0);
 
-			// Vérification du gagnant après chaque mouvement
+			// Vï¿½rification du gagnant aprï¿½s chaque mouvement
 			checkWinner(zones, winner, clientSocket);
 
-			// Changement de joueur après un mouvement valide
+			// Changement de joueur aprï¿½s un mouvement valide
 			if (painter == zone::painterList::CIRCLE) {
 				painter = zone::painterList::CROSS;
 			}
@@ -153,7 +152,7 @@ void clientHandler(ClientData& clientData) {
 	int& painter = clientData.painter;
 	int& winner = clientData.winner;
 
-	// Message pour indiquer qu'un client s'est connecté
+	// Message pour indiquer qu'un client s'est connectï¿½
 	cout << "Client connected!" << endl;
 
 	char buf[4096];
@@ -171,26 +170,26 @@ void clientHandler(ClientData& clientData) {
 			break;
 		}
 
-		// Traitement des données reçues du client
+		// Traitement des donnï¿½es reï¿½ues du client
 		cout << "Received from client: " << buf << endl;
 
-		// Appeler la fonction pour gérer les mouvements du joueur
+		// Appeler la fonction pour gï¿½rer les mouvements du joueur
 		handleMove(clientData, buf);
 	}
 
-	// Fermer le socket du client lorsque la communication est terminée
+	// Fermer le socket du client lorsque la communication est terminï¿½e
 	closesocket(clientSocket);
 }
 
 int main() {
-	// Déclaration des variables pour le serveur
+	// Dï¿½claration des variables pour le serveur
 	SOCKET listening;
 	sockaddr_in hint;
 	char buf[4096];
 
 	// Initialisation du serveur
 	if (!initializeServer(listening, hint, 5004)) {
-		return 0; // Quitter le programme en cas d'échec de l'initialisation
+		return 0; // Quitter le programme en cas d'ï¿½chec de l'initialisation
 	}
 
 	std::vector<zone> zones;
