@@ -9,12 +9,20 @@ using namespace std;
 
 struct ClientData {
 	SOCKET clientSocket;
-	std::vector<zone> zones;
 	int painter;
-	int winner;
 
-	ClientData(SOCKET socket) : clientSocket(socket), painter(zone::painterList::CIRCLE), winner(0) {}
+	ClientData(SOCKET socket, int paint) : clientSocket(socket), painter(paint){}
 };
+
+
+std::vector<ClientData> clients;
+std::vector<zone> zones;
+int painter = zone::painterList::CIRCLE;
+
+int newPlayerPaint = zone::painterList::CIRCLE;
+
+int winner = 0;
+int victories[8][3] = { {0, 1, 2}, {3, 4, 5}, {6, 7, 8}, {0, 3, 6}, {1, 4, 7}, {2, 5, 8}, {0, 4, 8}, {2, 4, 6} };
 
 bool initializeServer(SOCKET& listeningSocket, sockaddr_in& hint, int port) {
 	// Initialisation de Winsock
@@ -47,7 +55,7 @@ bool initializeServer(SOCKET& listeningSocket, sockaddr_in& hint, int port) {
 		return false;
 	}
 
-	// Mise en �coute du socket
+	// Mise en ecoute du socket
 	if (listen(listeningSocket, SOMAXCONN) == SOCKET_ERROR) {
 		cerr << "Can't listen on socket! Quitting..." << endl;
 		closesocket(listeningSocket);
@@ -97,60 +105,62 @@ void checkWinner(vector<zone>& zones, int& winner, SOCKET clientSocket) {
 	}
 }
 
-void handleMove(ClientData& clientData, char* buf) {
-	SOCKET clientSocket = clientData.clientSocket;
-	std::vector<zone>& zones = clientData.zones;
-	int& painter = clientData.painter;
-	int& winner = clientData.winner;
+//void handleMove(ClientData& clientData, char* buf) {
+//	SOCKET clientSocket = clientData.clientSocket;
+//	int& painter = clientData.painter;
+//
+//	ZeroMemory(buf, 4096);
+//
+//	int byteReceived = recv(clientSocket, buf, 4096, 0);
+//	if (byteReceived == SOCKET_ERROR) {
+//		cerr << "Error in recv(). Quitting" << endl;
+//		return;
+//	}
+//
+//	if (byteReceived == 0) {
+//		cout << "Client is disconnected!" << endl;
+//		return;
+//	}
+//
+//	cout << buf << endl;
+//
+//	Vector2i position;
+//	if (buf[0] == 'P') {
+//		if (int(buf[1]) - '0' == painter) {
+//			position = Vector2i(int(buf[3]) - '0', int(buf[5]) - '0');
+//			string userInput = "P" + to_string(painter) + "X" + to_string(position.x) + "Y" + to_string(position.y);
+//			zones[position.x + position.y * 3].painter = painter;
+//			send(clientSocket, userInput.c_str(), userInput.size() + 1, 0);
+//
+//			// Verification du gagnant apres chaque mouvement
+//			checkWinner(zones, winner, clientSocket);
+//
+//			// Changement de joueur apres un mouvement valide
+//			if (painter == zone::painterList::CIRCLE) {
+//				painter = zone::painterList::CROSS;
+//			}
+//			else {
+//				painter = zone::painterList::CIRCLE;
+//			}
+//		}
+//		else {
+//			// Envoyer un message indiquant que c'est au tour de l'autre joueur
+//			string message = "Not your turn, current player: " + to_string(painter);
+//			send(clientSocket, message.c_str(), message.size() + 1, 0);
+//			cout << "Not your turn, current player: " << painter << endl;
+//		}
+//	}
+//}
 
-	ZeroMemory(buf, 4096);
-
-	int byteReceived = recv(clientSocket, buf, 4096, 0);
-	if (byteReceived == SOCKET_ERROR) {
-		cerr << "Error in recv(). Quitting" << endl;
-		return;
-	}
-
-	if (byteReceived == 0) {
-		cout << "Client is disconnected!" << endl;
-		return;
-	}
-
-	cout << buf << endl;
-
-	Vector2i position;
-	if (buf[0] == 'P') {
-		if (int(buf[1]) - '0' == painter) {
-			position = Vector2i(int(buf[3]) - '0', int(buf[5]) - '0');
-			string userInput = "P" + to_string(painter) + "X" + to_string(position.x) + "Y" + to_string(position.y);
-			zones[position.x + position.y * 3].painter = painter;
-			send(clientSocket, userInput.c_str(), userInput.size() + 1, 0);
-
-			// Verification du gagnant apres chaque mouvement
-			checkWinner(zones, winner, clientSocket);
-
-			// Changement de joueur apres un mouvement valide
-			if (painter == zone::painterList::CIRCLE) {
-				painter = zone::painterList::CROSS;
-			}
-			else {
-				painter = zone::painterList::CIRCLE;
-			}
-		}
-		else {
-			// Envoyer un message indiquant que c'est au tour de l'autre joueur
-			string message = "Not your turn, current player: " + to_string(painter);
-			send(clientSocket, message.c_str(), message.size() + 1, 0);
-			cout << "Not your turn, current player: " << painter << endl;
-		}
+void sendAllClients(string userInput)
+{
+	for (int i = 0; i < clients.size(); i++)
+	{
+		send(clients[i].clientSocket, userInput.c_str(), userInput.size() + 1, 0);
 	}
 }
-
 void clientHandler(ClientData& clientData) {
 	SOCKET clientSocket = clientData.clientSocket;
-	std::vector<zone>& zones = clientData.zones;
-	int& painter = clientData.painter;
-	int& winner = clientData.winner;
 
 	// Message pour indiquer qu'un client s'est connecte
 	cout << "Client connected!" << endl;
@@ -174,14 +184,101 @@ void clientHandler(ClientData& clientData) {
 		cout << "Received from client: " << buf << endl;
 
 		// Appeler la fonction pour gerer les mouvements du joueur
-		handleMove(clientData, buf);
+		// handleMove(clientData, buf);
+
+		Vector2i position;
+		string userInput;
+		if (buf[0] == 'P')
+		{
+			if (int(buf[1]) - '0' == painter)
+			{
+				position = Vector2i(int(buf[3]) - '0', int(buf[5]) - '0');
+				// userInput = "P" + to_string(painter) + "X" + to_string(position.x) + "Y" + to_string(position.y);
+				zones[position.x + position.y * 3].painter = painter;
+				userInput = "S";
+
+				for (int j = 0; j < 3; j++)
+				{
+					for (int i = 0; i < 3; i++)
+					{
+						userInput += to_string(zones[i + j * 3].painter);
+					}
+				}
+				send(clientSocket, userInput.c_str(), userInput.size(), 0);
+				cout << userInput << endl;
+				sendAllClients(userInput);
+
+				for (int i = 0; i < 8; i++)
+				{
+					if (zones[victories[i][0]].painter != zone::painterList::NONE && zones[victories[i][0]].painter == zones[victories[i][1]].painter && zones[victories[i][0]].painter == zones[victories[i][2]].painter)
+					{
+						winner = painter;
+					}
+				}
+
+				if (winner == zone::painterList::CIRCLE)
+				{
+					sendAllClients("W1");
+					cout << "W1" << endl;
+				}
+				else if (winner == zone::painterList::CROSS)
+				{
+					sendAllClients("W2");
+					cout << "W2" << endl;
+				}
+
+				if (painter == zone::painterList::CIRCLE)
+				{
+					painter = zone::painterList::CROSS;
+				}
+				else if (painter == zone::painterList::CROSS)
+				{
+					painter = zone::painterList::CIRCLE;
+				}
+			}
+			else
+			{
+				send(clientSocket, 'N' + to_string(painter).c_str(), 2, 0);
+				cout << "N" + to_string(painter) << endl;
+			}
+		}
+		if (buf[0] == 'S')
+		{
+			userInput = "S";
+
+			for (int j = 0; j < 3; j++)
+			{
+				for (int i = 0; i < 3; i++)
+				{
+					userInput += to_string(zones[i + j * 3].painter);
+				}
+			}
+			send(clientSocket, userInput.c_str(), userInput.size(), 0);
+			cout << userInput << endl;
+		}
+		if (buf[0] == 'Q')
+		{
+			userInput = "Q" + to_string(clientData.painter);
+			send(clientSocket, userInput.c_str(), userInput.size(), 0);
+			cout << userInput << endl;
+		}
 	}
 
-	// Fermer le socket du client lorsque la communication est termin�e
+	// Fermer le socket du client lorsque la communication est terminee
 	closesocket(clientSocket);
 }
 
-int main() {
+int main() 
+{
+	for (int j = 0; j < 3; j++)
+	{
+		for (int i = 0; i < 3; i++)
+		{
+			zone newZone(Vector2i(i, j));
+			zones.push_back(newZone);
+		}
+	}
+
 	// Declaration des variables pour le serveur
 	SOCKET listening;
 	sockaddr_in hint;
@@ -192,18 +289,18 @@ int main() {
 		return 0; // Quitter le programme en cas d'echec de l'initialisation
 	}
 
-	std::vector<zone> zones;
-	int painter = zone::painterList::CIRCLE;
-	int winner = 0;
-
-	std::vector<ClientData> clients;
-
 	// Boucle d'acceptation des clients et traitement
 	while (true) {
 		// Acceptation des connexions des clients
 		SOCKET clientSocket = accept(listening, nullptr, nullptr);
 		if (clientSocket != INVALID_SOCKET) {
-			clients.emplace_back(clientSocket);
+			ClientData client = ClientData(clientSocket, newPlayerPaint);
+			clients.emplace_back(client);
+			if (newPlayerPaint == zone::painterList::CROSS)
+				newPlayerPaint = zone::painterList::NONE;
+			if (newPlayerPaint == zone::painterList::CIRCLE)
+				newPlayerPaint = zone::painterList::CROSS;
+
 			std::thread clientThread(clientHandler, std::ref(clients.back()));
 			clientThread.detach();
 		}
