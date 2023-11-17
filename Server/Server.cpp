@@ -26,7 +26,7 @@ bool initializeServer(SOCKET& listeningSocket, sockaddr_in& hint, int port) {
 		return false;
 	}
 
-	// Cr�ation du socket
+	// Creation du socket
 	listeningSocket = socket(AF_INET, SOCK_STREAM, 0);
 	if (listeningSocket == INVALID_SOCKET) {
 		cerr << "Can't create a socket! Quitting..." << endl;
@@ -60,8 +60,8 @@ bool initializeServer(SOCKET& listeningSocket, sockaddr_in& hint, int port) {
 }
 
 void checkWinner(vector<zone>& zones, int& winner, SOCKET clientSocket) {
-	// V�rification du gagnant selon les r�gles du jeu
-	// V�rifiez si l'une des combinaisons gagnantes est remplie
+	// Verification du gagnant selon les r�gles du jeu
+	// Verifiez si l'une des combinaisons gagnantes est remplie
 
 	// 0 1 2
 	// 3 4 5
@@ -77,7 +77,7 @@ void checkWinner(vector<zone>& zones, int& winner, SOCKET clientSocket) {
 		(zones[2].painter != 0 && zones[2].painter == zones[4].painter && zones[2].painter == zones[6].painter))
 	{
 		// S'il y a un gagnant
-		winner = zones[0].painter; // Assumons que le gagnant est le joueur de la zone[0]
+		winner = zones[0].painter; // Assumons que le gagnant est le joueur de la zone[0], TODO Utiliser le joueur qui vient de jouer
 
 		// Envoi d'un message au client indiquant le gagnant
 		if (winner == zone::painterList::CIRCLE) {
@@ -126,10 +126,10 @@ void handleMove(ClientData& clientData, char* buf) {
 			zones[position.x + position.y * 3].painter = painter;
 			send(clientSocket, userInput.c_str(), userInput.size() + 1, 0);
 
-			// V�rification du gagnant apr�s chaque mouvement
+			// Verification du gagnant apres chaque mouvement
 			checkWinner(zones, winner, clientSocket);
 
-			// Changement de joueur apr�s un mouvement valide
+			// Changement de joueur apres un mouvement valide
 			if (painter == zone::painterList::CIRCLE) {
 				painter = zone::painterList::CROSS;
 			}
@@ -152,7 +152,7 @@ void clientHandler(ClientData& clientData) {
 	int& painter = clientData.painter;
 	int& winner = clientData.winner;
 
-	// Message pour indiquer qu'un client s'est connect�
+	// Message pour indiquer qu'un client s'est connecte
 	cout << "Client connected!" << endl;
 
 	char buf[4096];
@@ -170,10 +170,10 @@ void clientHandler(ClientData& clientData) {
 			break;
 		}
 
-		// Traitement des donn�es re�ues du client
+		// Traitement des donnees recues du client
 		cout << "Received from client: " << buf << endl;
 
-		// Appeler la fonction pour g�rer les mouvements du joueur
+		// Appeler la fonction pour gerer les mouvements du joueur
 		handleMove(clientData, buf);
 	}
 
@@ -182,14 +182,14 @@ void clientHandler(ClientData& clientData) {
 }
 
 int main() {
-	// D�claration des variables pour le serveur
+	// Declaration des variables pour le serveur
 	SOCKET listening;
 	sockaddr_in hint;
 	char buf[4096];
 
 	// Initialisation du serveur
 	if (!initializeServer(listening, hint, 5004)) {
-		return 0; // Quitter le programme en cas d'�chec de l'initialisation
+		return 0; // Quitter le programme en cas d'echec de l'initialisation
 	}
 
 	std::vector<zone> zones;
