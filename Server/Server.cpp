@@ -187,7 +187,7 @@ DWORD WINAPI clientHandlerThread(LPVOID lpParam) {
 
 // Fonction pour le serveur principal
 DWORD WINAPI serverMain(LPVOID lpParam) {
-	cout << "Server Main thread running..." << endl;
+	cout << "Server Main thread running...\n" << endl;
 	
 	// Déclaration des variables pour le serveur
 	SOCKET listening;
@@ -214,10 +214,12 @@ DWORD WINAPI serverMain(LPVOID lpParam) {
 			// Ici, vous pouvez gérer la logique pour les spectateurs et les joueurs dans le même thread
 			// Par exemple, examinez si un joueur est déjà connecté, puis assignez le nouveau client comme spectateur
 			if (clients.size() <= 2) {
+				cout << "Player connected!" << endl; // Message lorsque qu'un joueur se connecte
 				// Traitez les joueurs
 				// Assignez le joueur et initiez le jeu si nécessaire
 			}
 			else {
+				cout << "Spectator connected!" << endl; // Message lorsque qu'un joueur se connecte
 				// Traitez les spectateurs
 				// Affichez l'état actuel du jeu ou d'autres informations pertinentes aux spectateurs
 			}
@@ -233,27 +235,26 @@ DWORD WINAPI serverMain(LPVOID lpParam) {
 
 // Fonction pour le serveur web
 DWORD WINAPI webServer(LPVOID lpParam) {
-	cout << "Web Server thread running..." << endl;
+	cout << "Web Server thread running...\n" << endl;
 	// Mettez ici le code du serveur web
 	// Il peut gérer les requêtes HTTP pour afficher l'état du jeu sur un navigateur
 	return 0;
 }
 
-
 int main() {
-	HANDLE serverThread = CreateThread(NULL, 0, serverMain, NULL, 0, NULL);
+	HANDLE serverThread = CreateThread(NULL, 0, serverMain, NULL, CREATE_NO_WINDOW, NULL);
 	if (serverThread == NULL) {
 		cerr << "Failed to create server thread!" << endl;
 		return 1;
 	}
 
-	HANDLE webThread = CreateThread(NULL, 0, webServer, NULL, 0, NULL);
+	HANDLE webThread = CreateThread(NULL, 0, webServer, NULL, CREATE_NO_WINDOW, NULL);
 	if (webThread == NULL) {
 		cerr << "Failed to create web server thread!" << endl;
 		return 1;
 	}
 
-	cout << "Main thread running..." << endl;
+	cout << "Main thread running...\n" << endl;
 	// Logique du thread principal (interface utilisateur, traitement supplémentaire, etc.)
 	// ... 
 
