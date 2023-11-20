@@ -184,7 +184,11 @@ DWORD WINAPI clientHandlerThread(LPVOID lpParam) {
 
 	return 0;
 }
-int main() {
+
+// Fonction pour le serveur principal
+DWORD WINAPI serverMain(LPVOID lpParam) {
+	cout << "Server Main thread running..." << endl;
+	
 	// Déclaration des variables pour le serveur
 	SOCKET listening;
 	sockaddr_in hint;
@@ -192,7 +196,7 @@ int main() {
 
 	// Initialisation du serveur
 	if (!initializeServer(listening, hint, 5004)) {
-		return 0; // Quitter le programme en cas d'échec de l'initialisation
+		return 0; // Quitter le thread en cas d'échec de l'initialisation
 	}
 
 	std::vector<zone> zones;
@@ -207,18 +211,58 @@ int main() {
 		SOCKET clientSocket = accept(listening, nullptr, nullptr);
 		if (clientSocket != INVALID_SOCKET) {
 			clients.emplace_back(clientSocket);
-			HANDLE hThread = CreateThread(nullptr, 0, clientHandlerThread, &clients.back(), 0, nullptr);
-			if (hThread == nullptr) {
-				cerr << "Error creating thread!" << endl;
-				break;
+			// Ici, vous pouvez gérer la logique pour les spectateurs et les joueurs dans le même thread
+			// Par exemple, examinez si un joueur est déjà connecté, puis assignez le nouveau client comme spectateur
+			if (clients.size() <= 2) {
+				// Traitez les joueurs
+				// Assignez le joueur et initiez le jeu si nécessaire
 			}
-			CloseHandle(hThread);
+			else {
+				// Traitez les spectateurs
+				// Affichez l'état actuel du jeu ou d'autres informations pertinentes aux spectateurs
+			}
 		}
 	}
 
 	// Fermeture du serveur
 	closesocket(listening);
 	WSACleanup();
+
+	return 0;
+}
+
+// Fonction pour le serveur web
+DWORD WINAPI webServer(LPVOID lpParam) {
+	cout << "Web Server thread running..." << endl;
+	// Mettez ici le code du serveur web
+	// Il peut gérer les requêtes HTTP pour afficher l'état du jeu sur un navigateur
+	return 0;
+}
+
+
+int main() {
+	HANDLE serverThread = CreateThread(NULL, 0, serverMain, NULL, 0, NULL);
+	if (serverThread == NULL) {
+		cerr << "Failed to create server thread!" << endl;
+		return 1;
+	}
+
+	HANDLE webThread = CreateThread(NULL, 0, webServer, NULL, 0, NULL);
+	if (webThread == NULL) {
+		cerr << "Failed to create web server thread!" << endl;
+		return 1;
+	}
+
+	cout << "Main thread running..." << endl;
+	// Logique du thread principal (interface utilisateur, traitement supplémentaire, etc.)
+	// ... 
+
+	// Attendre la fin des threads avant de terminer
+	WaitForSingleObject(serverThread, INFINITE);
+	WaitForSingleObject(webThread, INFINITE);
+
+	CloseHandle(serverThread);
+	CloseHandle(webThread);
 
 	return 0;
 }
