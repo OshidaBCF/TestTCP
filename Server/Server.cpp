@@ -18,20 +18,11 @@ struct ClientData {
 };
 
 bool initializeServer(SOCKET& listeningSocket, sockaddr_in& hint, int port) {
-	// Initialisation de Winsock
-	WSADATA wsData;
-	WORD ver = MAKEWORD(2, 2);
-	int wsOk = WSAStartup(ver, &wsData);
-	if (wsOk != 0) {
-		cerr << "Can't Initialize winsock! Quitting..." << endl;
-		return false;
-	}
-
+	
 	// Création du socket
 	listeningSocket = socket(AF_INET, SOCK_STREAM, 0);
 	if (listeningSocket == INVALID_SOCKET) {
 		cerr << "Can't create a socket! Quitting..." << endl;
-		WSACleanup();
 		return false;
 	}
 
@@ -242,6 +233,15 @@ DWORD WINAPI webServer(LPVOID lpParam) {
 }
 
 int main() {
+	// Initialisation de Winsock
+	WSADATA wsData;
+	WORD ver = MAKEWORD(2, 2);
+	int wsOk = WSAStartup(ver, &wsData);
+	if (wsOk != 0) {
+		cerr << "Can't Initialize winsock! Quitting..." << endl;
+		return 1;
+	}
+
 	HANDLE serverThread = CreateThread(NULL, 0, serverMain, NULL, CREATE_NO_WINDOW, NULL);
 	if (serverThread == NULL) {
 		cerr << "Failed to create server thread!" << endl;
@@ -264,6 +264,8 @@ int main() {
 
 	CloseHandle(serverThread);
 	CloseHandle(webThread);
+
+	WSACleanup();
 
 	return 0;
 }
