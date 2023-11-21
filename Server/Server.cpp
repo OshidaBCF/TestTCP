@@ -34,6 +34,7 @@ std::vector<ClientData> clients;
 
 // Implémentation de la fonction de gestion des événements
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+	SOCKET Accept;
 	switch (uMsg) {
 	case WM_CLOSE:
 		// Gérer l'événement de fermeture de la fenêtre
@@ -68,21 +69,55 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 	{
 		switch (WSAGETSELECTEVENT(lParam))
 		{
+		case FD_ACCEPT:
+		{
+			if ((Accept = accept(wParam, NULL, NULL)) == INVALID_SOCKET)
+			{
+				printf("accept() failed with error %d\n", WSAGetLastError());
+				break;
+			}
+			else
+				printf("accept() is OK!\n");
+
+			WSAAsyncSelect(Accept, hwnd, WM_SHARED_SOCKET_EVENT, FD_READ | FD_WRITE | FD_CLOSE);
+	
+
+			/*//----------------------
+			// Accept the connection.
+			AcceptSocket = accept(listeningSocket, NULL, NULL);
+			if (AcceptSocket == INVALID_SOCKET) {
+				wprintf(L"accept failed with error: %ld\n", WSAGetLastError());
+				closesocket(listeningSocket);
+				WSACleanup();
+				return 1;
+			}
+			else
+			{
+				clients.emplace_back(AcceptSocket);
+				// Ici, vous pouvez gérer la logique pour les spectateurs et les joueurs dans le même thread
+				// Par exemple, examinez si un joueur est déjà connecté, puis assignez le nouveau client comme spectateur
+				if (clients.size() <= 2) {
+					cout << "Player connected!" << endl; // Message lorsque qu'un joueur se connecte
+					// Traitez les joueurs
+					// Assignez le joueur et initiez le jeu si nécessaire
+				}
+				else {
+					cout << "Spectator connected!" << endl; // Message lorsque qu'un joueur se connecte
+					// Traitez les spectateurs
+					// Affichez l'état actuel du jeu ou d'autres informations pertinentes aux spectateurs
+				}
+			}*/
+		}
+		break;
 		case FD_READ:
 		{
 			SOCKET data_socket = (SOCKET)wParam;
-			//WSAAsyncSelect: READ|CLOSE
-			if (WSAAsyncSelect(data_socket, hwnd, WM_SHARED_SOCKET_EVENT, FD_READ | FD_CLOSE) == SOCKET_ERROR)
-			{}
-			else 
+			char buf[4096];
+			ZeroMemory(buf, 4096);
+			int BytesReceived = recv(data_socket, buf, 4096, 0);
+			if (BytesReceived)
 			{
-				char buf[4096];
-				ZeroMemory(buf, 4096);
-				int BytesReceived = recv(data_socket, buf, 4096, 0);
-				if (BytesReceived)
-				{
-					// Rien
-				}
+				// Rien
 			}
 		}
 		break;
@@ -100,7 +135,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 	return 0;
 }
 
-bool initializeServer(SOCKET& listeningSocket, sockaddr_in& hint, int port) {
+bool initializeServer(SOCKET& listeningSocket, sockaddr_in& hint, int port, HWND hWnd) {
 	// Initialisation de Winsock
 	WSADATA wsData;
 	WORD ver = MAKEWORD(2, 2);
@@ -139,35 +174,7 @@ bool initializeServer(SOCKET& listeningSocket, sockaddr_in& hint, int port) {
 		return false;
 	}
 
-	// Create a SOCKET for accepting incoming requests.
-	SOCKET AcceptSocket;
-	wprintf(L"Waiting for client to connect...\n");
-
-	//----------------------
-	// Accept the connection.
-	AcceptSocket = accept(listeningSocket, NULL, NULL);
-	if (AcceptSocket == INVALID_SOCKET) {
-		wprintf(L"accept failed with error: %ld\n", WSAGetLastError());
-		closesocket(listeningSocket);
-		WSACleanup();
-		return 1;
-	}
-	else
-	{
-		clients.emplace_back(AcceptSocket);
-		// Ici, vous pouvez gérer la logique pour les spectateurs et les joueurs dans le même thread
-		// Par exemple, examinez si un joueur est déjà connecté, puis assignez le nouveau client comme spectateur
-		if (clients.size() <= 2) {
-			cout << "Player connected!" << endl; // Message lorsque qu'un joueur se connecte
-			// Traitez les joueurs
-			// Assignez le joueur et initiez le jeu si nécessaire
-		}
-		else {
-			cout << "Spectator connected!" << endl; // Message lorsque qu'un joueur se connecte
-			// Traitez les spectateurs
-			// Affichez l'état actuel du jeu ou d'autres informations pertinentes aux spectateurs
-		}
-	}
+	WSAAsyncSelect(listeningSocket, hWnd, WM_SHARED_SOCKET_EVENT, FD_ACCEPT | FD_CLOSE);
 
 	cout << "Server initialized and listening on port " << port << endl;
 	return true;
@@ -333,13 +340,6 @@ DWORD WINAPI serverMain(LPVOID lpParam) {
 	// Afficher la fenêtre cachée (si nécessaire)
 	//ShowWindow(hiddenWindow, SW_SHOWNORMAL);
 
-	// Lancer la boucle de messages
-	MSG msg = {};
-	while (GetMessage(&msg, NULL, 0, 0)) {
-		TranslateMessage(&msg);
-		DispatchMessage(&msg);
-	}
-
 	cout << "Server Main thread running...\n";
 	
 	// Déclaration des variables pour le serveur
@@ -347,14 +347,9 @@ DWORD WINAPI serverMain(LPVOID lpParam) {
 	sockaddr_in hint;
 	char buf[4096];
 
-	while (true)
-	{
-		// Initialisation du serveur
-		if (!initializeServer(listening, hint, 5004)) {
-			return 0; // Quitter le thread en cas d'échec de l'initialisation
-		}
-
-		WSAAsyncSelect(listening, hiddenWindow, WM_SHARED_SOCKET_EVENT, FD_READ | FD_WRITE | FD_ACCEPT | FD_CONNECT | FD_CLOSE);
+	// Initialisation du serveur
+	if (!initializeServer(listening, hint, 5004, hiddenWindow)) {
+		return 0; // Quitter le thread en cas d'échec de l'initialisation
 	}
 
 	std::vector<zone> zones;
@@ -362,8 +357,36 @@ DWORD WINAPI serverMain(LPVOID lpParam) {
 	int winner = 0;
 
 	// Do something at some point iguess
+	MSG msg;
+	DWORD Ret;
+	while (Ret = GetMessage(&msg, NULL, 0, 0))
+	{
+
+		if (Ret == -1)
+
+		{
+
+			printf("\nGetMessage() failed with error %d\n", GetLastError());
+
+			return 1;
+
+		}
+
+		else
+
+			printf("\nGetMessage() is pretty fine!\n");
 
 
+
+		printf("Translating a message...\n");
+
+		TranslateMessage(&msg);
+
+		printf("Dispatching a message...\n");
+
+		DispatchMessage(&msg);
+
+	}
 
 	// Fermeture du serveur
 	closesocket(listening);
@@ -412,9 +435,6 @@ DWORD WINAPI webServer(LPVOID lpParam) {
 	}
 
 
-
-
-
 	cout << "Web Server thread running...\n";
 	// Mettez ici le code du serveur web
 	// Il peut gérer les requêtes HTTP pour afficher l'état du jeu sur un navigateur
@@ -451,17 +471,6 @@ int main() {
 
 	// Afficher la fenêtre cachée (si nécessaire)
 	//ShowWindow(hiddenWindow, SW_SHOWNORMAL);
-
-	// Lancer la boucle de messages
-	MSG msg = {};
-	while (GetMessage(&msg, NULL, 0, 0)) {
-		TranslateMessage(&msg);
-		DispatchMessage(&msg);
-	}
-
-
-
-
 
 	// Gestion Threads
 	HANDLE serverThread = CreateThread(NULL, 0, serverMain, NULL, CREATE_NO_WINDOW, NULL);
