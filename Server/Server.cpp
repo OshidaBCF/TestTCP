@@ -1,12 +1,25 @@
 #include <iostream>
 #include "Zone.h"
+#include <mutex>
 #include <string>
 #include <vector>
+#define _WINSOCK_DEPRECATED_NO_WARNINGS
 #include <WS2tcpip.h>
 #include <processthreadsapi.h>
 #pragma comment (lib, "ws2_32.lib")
 
 using namespace std;
+
+#define EVENT_FOR_MAIN (WM_USER + 1)
+#define EVENT_FOR_GAME (WM_USER + 2)
+#define EVENT_FOR_WEB  (WM_USER + 3)
+#define WM_SHARED_SOCKET_EVENT  (WM_USER + 4)
+
+std::string message;
+std::mutex messageMutex;
+
+
+void clientHandler();
 
 struct ClientData {
 	SOCKET clientSocket;
@@ -16,6 +29,76 @@ struct ClientData {
 
 	ClientData(SOCKET socket) : clientSocket(socket), painter(zone::painterList::CIRCLE), winner(0) {}
 };
+
+std::vector<ClientData> clients;
+
+// Implémentation de la fonction de gestion des événements
+LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+	switch (uMsg) {
+	case WM_CLOSE:
+		// Gérer l'événement de fermeture de la fenêtre
+		MessageBox(NULL, L"Fermeture de la fenêtre cachée.", L"Événement", MB_ICONINFORMATION);
+		DestroyWindow(hwnd);
+		break;
+	case WM_DESTROY:
+		// Gérer la destruction de la fenêtre
+		PostQuitMessage(0);
+		break;
+	case EVENT_FOR_MAIN:
+		messageMutex.lock();
+		for (int i = 0; i < clients.size(); i++)
+		{
+			send(clients[i].clientSocket, message.c_str(), message.size() + 1, 0);
+		}
+		messageMutex.unlock();
+		PostMessage(hwnd, EVENT_FOR_WEB, wParam, lParam);
+		break;
+	case EVENT_FOR_GAME:
+		messageMutex.lock();
+		clientHandler();
+		messageMutex.unlock();
+		PostMessage(hwnd, EVENT_FOR_WEB, wParam, lParam);
+		break;
+	case EVENT_FOR_WEB:
+		messageMutex.lock();
+
+		messageMutex.unlock();
+		break;
+	case WM_SHARED_SOCKET_EVENT:
+	{
+		switch (WSAGETSELECTEVENT(lParam))
+		{
+		case FD_READ:
+		{
+			SOCKET data_socket = (SOCKET)wParam;
+			//WSAAsyncSelect: READ|CLOSE
+			if (WSAAsyncSelect(data_socket, hwnd, WM_SHARED_SOCKET_EVENT, FD_READ | FD_CLOSE) == SOCKET_ERROR)
+			{}
+			else 
+			{
+				char buf[4096];
+				ZeroMemory(buf, 4096);
+				int BytesReceived = recv(data_socket, buf, 4096, 0);
+				if (BytesReceived)
+				{
+					// Rien
+				}
+			}
+		}
+		break;
+		case FD_CLOSE:
+			closesocket((SOCKET)wParam);
+			break;
+		}
+	}
+	break;
+	default:
+		// Laisser les autres messages être gérés par la procédure par défaut
+		return DefWindowProc(hwnd, uMsg, wParam, lParam);
+	}
+
+	return 0;
+}
 
 bool initializeServer(SOCKET& listeningSocket, sockaddr_in& hint, int port) {
 	// Initialisation de Winsock
@@ -54,6 +137,36 @@ bool initializeServer(SOCKET& listeningSocket, sockaddr_in& hint, int port) {
 		closesocket(listeningSocket);
 		WSACleanup();
 		return false;
+	}
+
+	// Create a SOCKET for accepting incoming requests.
+	SOCKET AcceptSocket;
+	wprintf(L"Waiting for client to connect...\n");
+
+	//----------------------
+	// Accept the connection.
+	AcceptSocket = accept(listeningSocket, NULL, NULL);
+	if (AcceptSocket == INVALID_SOCKET) {
+		wprintf(L"accept failed with error: %ld\n", WSAGetLastError());
+		closesocket(listeningSocket);
+		WSACleanup();
+		return 1;
+	}
+	else
+	{
+		clients.emplace_back(AcceptSocket);
+		// Ici, vous pouvez gérer la logique pour les spectateurs et les joueurs dans le même thread
+		// Par exemple, examinez si un joueur est déjà connecté, puis assignez le nouveau client comme spectateur
+		if (clients.size() <= 2) {
+			cout << "Player connected!" << endl; // Message lorsque qu'un joueur se connecte
+			// Traitez les joueurs
+			// Assignez le joueur et initiez le jeu si nécessaire
+		}
+		else {
+			cout << "Spectator connected!" << endl; // Message lorsque qu'un joueur se connecte
+			// Traitez les spectateurs
+			// Affichez l'état actuel du jeu ou d'autres informations pertinentes aux spectateurs
+		}
 	}
 
 	cout << "Server initialized and listening on port " << port << endl;
@@ -147,84 +260,110 @@ void handleMove(ClientData& clientData, char* buf) {
 	}
 }
 
-DWORD WINAPI clientHandlerThread(LPVOID lpParam) {
-	ClientData* clientData = reinterpret_cast<ClientData*>(lpParam);
-	SOCKET clientSocket = clientData->clientSocket;
-	std::vector<zone>& zones = clientData->zones;
-	int& painter = clientData->painter;
-	int& winner = clientData->winner;
+void clientHandler() {
+	for (int i = 0; i < clients.size(); i++)
+	{
+		SOCKET clientSocket = clients[i].clientSocket;
+		std::vector<zone> zones = clients[i].zones;
+		int painter = clients[i].painter;
+		int winner = clients[i].winner;
 
-	// Message pour indiquer qu'un client s'est connecté
-	cout << "Client connected!" << endl;
+		// Message pour indiquer qu'un client s'est connecté
+		cout << "Client connected!" << endl;
 
-	char buf[4096];
-	while (true) {
-		ZeroMemory(buf, sizeof(buf));
+		char buf[4096];
+		while (true) {
+			ZeroMemory(buf, sizeof(buf));
 
-		int byteReceived = recv(clientSocket, buf, sizeof(buf), 0);
-		if (byteReceived == SOCKET_ERROR) {
-			cerr << "Error in recv(). Quitting" << endl;
-			break;
+			int byteReceived = recv(clientSocket, buf, sizeof(buf), 0);
+			if (byteReceived == SOCKET_ERROR) {
+				cerr << "Error in recv(). Quitting" << endl;
+				break;
+			}
+
+			if (byteReceived == 0) {
+				cout << "Client is disconnected!" << endl;
+				// TODO remove client from clientlist
+				break;
+			}
+
+			// Traitement des données reçues du client
+			cout << "Received from client: " << buf << endl;
+
+			// Appeler la fonction pour gérer les mouvements du joueur
+			handleMove(clients[i], buf);
 		}
 
-		if (byteReceived == 0) {
-			cout << "Client is disconnected!" << endl;
-			break;
-		}
-
-		// Traitement des données reçues du client
-		cout << "Received from client: " << buf << endl;
-
-		// Appeler la fonction pour gérer les mouvements du joueur
-		handleMove(*clientData, buf);
+		// Fermer le socket du client lorsque la communication est terminée
+		closesocket(clientSocket);
 	}
 
-	// Fermer le socket du client lorsque la communication est terminée
-	closesocket(clientSocket);
-
-	return 0;
+	return;
 }
 
 // Fonction pour le serveur principal
 DWORD WINAPI serverMain(LPVOID lpParam) {
-	cout << "Server Main thread running...\n" << endl;
+	// Creation de la window class
+	HINSTANCE hInstance = GetModuleHandle(NULL);
+
+	// Définir la classe de la fenêtre
+	WNDCLASS windowClass = {};
+	windowClass.lpfnWndProc = WindowProc;
+	windowClass.hInstance = hInstance;
+	windowClass.lpszClassName = L"MyHiddenWindowClass";
+
+	// Enregistrer la classe de fenêtre
+	RegisterClass(&windowClass);
+
+	// Créer la fenêtre cachée
+	HWND hiddenWindow = CreateWindowEx(
+		0,                              // Styles étendus
+		L"MyHiddenWindowClass",        // Nom de la classe
+		L"MyHiddenWindow",              // Titre de la fenêtre
+		WS_OVERLAPPEDWINDOW,// Style de la fenêtre (fenêtre cachée)
+		CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
+		NULL, NULL, hInstance, NULL);
+
+	// Vérifier si la fenêtre a été créée avec succès
+	if (hiddenWindow == NULL) {
+		MessageBox(NULL, L"Erreur lors de la création de la fenêtre cachée.", L"Erreur", MB_ICONERROR);
+		return 1;
+	}
+
+	// Afficher la fenêtre cachée (si nécessaire)
+	//ShowWindow(hiddenWindow, SW_SHOWNORMAL);
+
+	// Lancer la boucle de messages
+	MSG msg = {};
+	while (GetMessage(&msg, NULL, 0, 0)) {
+		TranslateMessage(&msg);
+		DispatchMessage(&msg);
+	}
+
+	cout << "Server Main thread running...\n";
 	
 	// Déclaration des variables pour le serveur
 	SOCKET listening;
 	sockaddr_in hint;
 	char buf[4096];
 
-	// Initialisation du serveur
-	if (!initializeServer(listening, hint, 5004)) {
-		return 0; // Quitter le thread en cas d'échec de l'initialisation
+	while (true)
+	{
+		// Initialisation du serveur
+		if (!initializeServer(listening, hint, 5004)) {
+			return 0; // Quitter le thread en cas d'échec de l'initialisation
+		}
+
+		WSAAsyncSelect(listening, hiddenWindow, WM_SHARED_SOCKET_EVENT, FD_READ | FD_WRITE | FD_ACCEPT | FD_CONNECT | FD_CLOSE);
 	}
 
 	std::vector<zone> zones;
 	int painter = zone::painterList::CIRCLE;
 	int winner = 0;
 
-	std::vector<ClientData> clients;
+	// Do something at some point iguess
 
-	// Boucle d'acceptation des clients et traitement
-	while (true) {
-		// Acceptation des connexions des clients
-		SOCKET clientSocket = accept(listening, nullptr, nullptr);
-		if (clientSocket != INVALID_SOCKET) {
-			clients.emplace_back(clientSocket);
-			// Ici, vous pouvez gérer la logique pour les spectateurs et les joueurs dans le même thread
-			// Par exemple, examinez si un joueur est déjà connecté, puis assignez le nouveau client comme spectateur
-			if (clients.size() <= 2) {
-				cout << "Player connected!" << endl; // Message lorsque qu'un joueur se connecte
-				// Traitez les joueurs
-				// Assignez le joueur et initiez le jeu si nécessaire
-			}
-			else {
-				cout << "Spectator connected!" << endl; // Message lorsque qu'un joueur se connecte
-				// Traitez les spectateurs
-				// Affichez l'état actuel du jeu ou d'autres informations pertinentes aux spectateurs
-			}
-		}
-	}
+
 
 	// Fermeture du serveur
 	closesocket(listening);
@@ -235,13 +374,96 @@ DWORD WINAPI serverMain(LPVOID lpParam) {
 
 // Fonction pour le serveur web
 DWORD WINAPI webServer(LPVOID lpParam) {
-	cout << "Web Server thread running...\n" << endl;
+	// Creation de la window class
+	HINSTANCE hInstance = GetModuleHandle(NULL);
+
+	// Définir la classe de la fenêtre
+	WNDCLASS windowClass = {};
+	windowClass.lpfnWndProc = WindowProc;
+	windowClass.hInstance = hInstance;
+	windowClass.lpszClassName = L"MyHiddenWindowClass";
+
+	// Enregistrer la classe de fenêtre
+	RegisterClass(&windowClass);
+
+	// Créer la fenêtre cachée
+	HWND hiddenWindow = CreateWindowEx(
+		0,                              // Styles étendus
+		L"MyHiddenWindowClass",        // Nom de la classe
+		L"MyHiddenWindow",              // Titre de la fenêtre
+		WS_OVERLAPPEDWINDOW,// Style de la fenêtre (fenêtre cachée)
+		CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
+		NULL, NULL, hInstance, NULL);
+
+	// Vérifier si la fenêtre a été créée avec succès
+	if (hiddenWindow == NULL) {
+		MessageBox(NULL, L"Erreur lors de la création de la fenêtre cachée.", L"Erreur", MB_ICONERROR);
+		return 1;
+	}
+
+	// Afficher la fenêtre cachée (si nécessaire)
+	//ShowWindow(hiddenWindow, SW_SHOWNORMAL);
+
+	// Lancer la boucle de messages
+	MSG msg = {};
+	while (GetMessage(&msg, NULL, 0, 0)) {
+		TranslateMessage(&msg);
+		DispatchMessage(&msg);
+	}
+
+
+
+
+
+	cout << "Web Server thread running...\n";
 	// Mettez ici le code du serveur web
 	// Il peut gérer les requêtes HTTP pour afficher l'état du jeu sur un navigateur
 	return 0;
 }
 
 int main() {
+	// Creation de la window class
+	HINSTANCE hInstance = GetModuleHandle(NULL);
+
+	// Définir la classe de la fenêtre
+	WNDCLASS windowClass = {};
+	windowClass.lpfnWndProc = WindowProc;
+	windowClass.hInstance = hInstance;
+	windowClass.lpszClassName = L"MyHiddenWindowClass";
+
+	// Enregistrer la classe de fenêtre
+	RegisterClass(&windowClass);
+
+	// Créer la fenêtre cachée
+	HWND hiddenWindow = CreateWindowEx(
+		0,                              // Styles étendus
+		L"MyHiddenWindowClass",        // Nom de la classe
+		L"MyHiddenWindow",              // Titre de la fenêtre
+		WS_OVERLAPPEDWINDOW,// Style de la fenêtre (fenêtre cachée)
+		CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
+		NULL, NULL, hInstance, NULL);
+
+	// Vérifier si la fenêtre a été créée avec succès
+	if (hiddenWindow == NULL) {
+		MessageBox(NULL, L"Erreur lors de la création de la fenêtre cachée.", L"Erreur", MB_ICONERROR);
+		return 1;
+	}
+
+	// Afficher la fenêtre cachée (si nécessaire)
+	//ShowWindow(hiddenWindow, SW_SHOWNORMAL);
+
+	// Lancer la boucle de messages
+	MSG msg = {};
+	while (GetMessage(&msg, NULL, 0, 0)) {
+		TranslateMessage(&msg);
+		DispatchMessage(&msg);
+	}
+
+
+
+
+
+	// Gestion Threads
 	HANDLE serverThread = CreateThread(NULL, 0, serverMain, NULL, CREATE_NO_WINDOW, NULL);
 	if (serverThread == NULL) {
 		cerr << "Failed to create server thread!" << endl;
@@ -254,9 +476,15 @@ int main() {
 		return 1;
 	}
 
-	cout << "Main thread running...\n" << endl;
+	cout << "Main thread running...\n";
 	// Logique du thread principal (interface utilisateur, traitement supplémentaire, etc.)
-	// ... 
+	// recv message
+	// put message in mutex
+	// send event to serverThread
+	// recv event from serverThread
+	// get message from mutex
+	// send message to client(s)
+	// send event to webThread
 
 	// Attendre la fin des threads avant de terminer
 	WaitForSingleObject(serverThread, INFINITE);
