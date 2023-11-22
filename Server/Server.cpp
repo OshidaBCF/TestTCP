@@ -10,10 +10,11 @@
 
 using namespace std;
 
-#define EVENT_FOR_MAIN (WM_USER + 1)
-#define EVENT_FOR_GAME (WM_USER + 2)
-#define EVENT_FOR_WEB  (WM_USER + 3)
-#define WM_SHARED_SOCKET_EVENT  (WM_USER + 4)
+#define EVENT_FOR_MAIN     (WM_USER + 1)
+#define EVENT_FOR_GAME     (WM_USER + 2)
+#define EVENT_FOR_WEB      (WM_USER + 3)
+#define GAME_SOCKET_EVENT  (WM_USER + 4)
+#define WEB_SOCKET_EVENT   (WM_USER + 5)
 
 std::string message;
 std::mutex messageMutex;
@@ -65,7 +66,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 
 		messageMutex.unlock();
 		break;
-	case WM_SHARED_SOCKET_EVENT:
+	case GAME_SOCKET_EVENT:
 	{
 		switch (WSAGETSELECTEVENT(lParam))
 		{
@@ -78,7 +79,45 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 				WSACleanup();
 				break;
 			}
-			WSAAsyncSelect(Accept, hwnd, WM_SHARED_SOCKET_EVENT, FD_READ | FD_WRITE | (1 << 5));
+			WSAAsyncSelect(Accept, hwnd, GAME_SOCKET_EVENT, FD_READ | FD_WRITE | FD_CLOSE);
+			if (clients.size() == 0) {
+				cout << "Player 1 connected!" << endl;
+				clients.emplace_back(Accept, zone::painterList::CIRCLE);
+			}
+			else if (clients.size() == 1) {
+				cout << "Player  2 connected!" << endl;
+				clients.emplace_back(Accept, zone::painterList::CROSS);
+			}
+			else {
+				cout << "Spectator connected!" << endl;
+				clients.emplace_back(Accept, zone::painterList::NONE);
+			}
+		}
+		break;
+		case FD_READ:
+		{
+			clientHandler((SOCKET)wParam);
+		}
+		break;
+		case FD_CLOSE:
+			closesocket((SOCKET)wParam);
+			break;
+		}
+	}
+	case WEB_SOCKET_EVENT:
+	{
+		switch (WSAGETSELECTEVENT(lParam))
+		{
+		case FD_ACCEPT:
+		{
+			if ((Accept = accept(wParam, NULL, NULL)) == INVALID_SOCKET)
+			{
+				printf("accept() failed with error %d\n", WSAGetLastError());
+				closesocket(wParam);
+				WSACleanup();
+				break;
+			}
+			WSAAsyncSelect(Accept, hwnd, GAME_SOCKET_EVENT, FD_READ | FD_WRITE | FD_CLOSE);
 			if (clients.size() == 0) {
 				cout << "Player 1 connected!" << endl;
 				clients.emplace_back(Accept, zone::painterList::CIRCLE);
@@ -112,7 +151,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 	return 0;
 }
 
-bool initializeServer(SOCKET& listeningSocket, sockaddr_in& hint, int port, HWND hWnd) {
+bool initializeGameServer(SOCKET& listeningSocket, sockaddr_in& hint, int port, HWND hWnd) {
 	// Initialisation de Winsock
 	WSADATA wsData;
 	WORD ver = MAKEWORD(2, 2);
@@ -148,7 +187,7 @@ bool initializeServer(SOCKET& listeningSocket, sockaddr_in& hint, int port, HWND
 		return false;
 	}
 
-	WSAAsyncSelect(listeningSocket, hWnd, WM_SHARED_SOCKET_EVENT, FD_ACCEPT | FD_CLOSE);
+	WSAAsyncSelect(listeningSocket, hWnd, GAME_SOCKET_EVENT, FD_ACCEPT | FD_CLOSE);
 
 	cout << "Server initialized and listening on port " << port << endl;
 	return true;
@@ -331,7 +370,7 @@ DWORD WINAPI serverMain(LPVOID lpParam) {
 	char buf[4096];
 
 	// Initialisation du serveur
-	if (!initializeServer(listening, hint, 5004, hiddenWindow)) {
+	if (!initializeGameServer(listening, hint, 5004, hiddenWindow)) {
 		return 0; // Quitter le thread en cas d'échec de l'initialisation
 	}
 
@@ -359,6 +398,49 @@ DWORD WINAPI serverMain(LPVOID lpParam) {
 	WSACleanup();
 
 	return 0;
+}
+
+
+bool initializeWebServer(SOCKET& listeningSocket, sockaddr_in& hint, int port, HWND hWnd) {
+	// Initialisation de Winsock
+	WSADATA wsData;
+	WORD ver = MAKEWORD(2, 2);
+	int wsOk = WSAStartup(ver, &wsData);
+	if (wsOk != 0) {
+		cerr << "Can't Initialize winsock! Quitting...\n";
+		return 1;
+	}
+
+	// Création du socket
+	listeningSocket = socket(AF_INET, SOCK_STREAM, 0);
+	if (listeningSocket == INVALID_SOCKET) {
+		cerr << "Can't create a socket! Quitting...\n";
+		return false;
+	}
+
+	// Configuration du socket
+	hint.sin_family = AF_INET;
+	hint.sin_port = htons(port);
+	hint.sin_addr.S_un.S_addr = INADDR_ANY;
+
+	// Liaison du socket
+	if (bind(listeningSocket, (sockaddr*)&hint, sizeof(hint)) == SOCKET_ERROR) {
+		cerr << "Can't bind to IP/port! Quitting...\n";
+		closesocket(listeningSocket);
+		return false;
+	}
+
+	// Mise en écoute du socket
+	if (listen(listeningSocket, SOMAXCONN) == SOCKET_ERROR) {
+		cerr << "Can't listen on socket! Quitting...\n";
+		closesocket(listeningSocket);
+		return false;
+	}
+
+	WSAAsyncSelect(listeningSocket, hWnd, WEB_SOCKET_EVENT, FD_ACCEPT | FD_CLOSE);
+
+	cout << "Server initialized and listening on port " << port << endl;
+	return true;
 }
 
 // Fonction pour le serveur web
@@ -400,12 +482,12 @@ DWORD WINAPI webServer(LPVOID lpParam) {
 	char buf[4096];
 
 	// Initialisation du serveur web
-	if (!initializeServer(webSocket, webHint, 5005, hiddenWindow)) {
+	if (!initializeWebServer(webSocket, webHint, 5005, hiddenWindow)) {
 		return 0; // Quitter le thread en cas d'échec de l'initialisation
 	}
 
 	// Message à afficher dans la fenêtre web
-	string message = "<html>\n<body>\n<h1>\nBienvenue sur le serveur de jeu\n</h1>\n</body>\n</html>";
+	string webMessage = "<html><body><h1>\nBienvenue sur le serveur de jeu\n</h1></body></html>";
 
 	// Boucle de gestion des requêtes web
 	while (true) {
@@ -415,7 +497,7 @@ DWORD WINAPI webServer(LPVOID lpParam) {
 
 			// Répondre à la requête avec un message HTML
 			string response = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n";
-			response += message;
+			response += webMessage;
 
 			send(clientWebSocket, response.c_str(), response.size(), 0);
 
