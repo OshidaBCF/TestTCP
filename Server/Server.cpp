@@ -363,6 +363,36 @@ DWORD WINAPI serverMain(LPVOID lpParam) {
 
 // Fonction pour le serveur web
 DWORD WINAPI webServer(LPVOID lpParam) {
+	// Creation de la window class
+	HINSTANCE hInstance = GetModuleHandle(NULL);
+
+	// Définir la classe de la fenêtre
+	WNDCLASS windowClass = {};
+	windowClass.lpfnWndProc = WindowProc;
+	windowClass.hInstance = hInstance;
+	windowClass.lpszClassName = L"MyHiddenWindowClass";
+
+	// Enregistrer la classe de fenêtre
+	RegisterClass(&windowClass);
+
+	// Créer la fenêtre cachée
+	HWND hiddenWindow = CreateWindowEx(
+		0,                              // Styles étendus
+		L"MyHiddenWindowClass",        // Nom de la classe
+		L"MyHiddenWindow",              // Titre de la fenêtre
+		WS_OVERLAPPEDWINDOW,// Style de la fenêtre (fenêtre cachée)
+		CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
+		NULL, NULL, hInstance, NULL);
+
+	// Vérifier si la fenêtre a été créée avec succès
+	if (hiddenWindow == NULL) {
+		MessageBox(NULL, L"Erreur lors de la création de la fenêtre cachée.", L"Erreur", MB_ICONERROR);
+		return 1;
+	}
+
+	// Afficher la fenêtre cachée (si nécessaire)
+	//ShowWindow(hiddenWindow, SW_SHOWNORMAL);
+
 	cout << "Web Server thread running...\n";
 
 	SOCKET webSocket;
@@ -370,12 +400,12 @@ DWORD WINAPI webServer(LPVOID lpParam) {
 	char buf[4096];
 
 	// Initialisation du serveur web
-	if (!initializeServer(webSocket, webHint, 5005)) {
+	if (!initializeServer(webSocket, webHint, 5005, hiddenWindow)) {
 		return 0; // Quitter le thread en cas d'échec de l'initialisation
 	}
 
 	// Message à afficher dans la fenêtre web
-	string message = "<html><body><h1>Bienvenue sur le serveur de jeu</h1></body></html>";
+	string message = "<html>\n<body>\n<h1>\nBienvenue sur le serveur de jeu\n</h1>\n</body>\n</html>";
 
 	// Boucle de gestion des requêtes web
 	while (true) {
