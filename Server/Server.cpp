@@ -231,7 +231,6 @@ void handleMove(ClientData& clientData, char* buf) {
 		cerr << "Error in recv(). Quitting" << endl;
 		return;
 	}
-
 	if (byteReceived == 0) {
 		cout << "Client is disconnected!" << endl;
 		return;
