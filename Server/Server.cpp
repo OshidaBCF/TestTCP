@@ -487,7 +487,7 @@ DWORD WINAPI webServer(LPVOID lpParam) {
 	}
 
 	// Message à afficher dans la fenêtre web
-	string webMessage = "<html><body><h1>\nBienvenue sur le serveur de jeu\n</h1></body></html>";
+	string webMessage = "<html><body><h1>Bienvenue sur le serveur de jeu</h1></body></html>";
 
 	// Boucle de gestion des requêtes web
 	while (true) {
