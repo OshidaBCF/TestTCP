@@ -150,7 +150,8 @@ bool initializeServer(SOCKET& listeningSocket, sockaddr_in& hint, int port, HWND
 
 	WSAAsyncSelect(listeningSocket, hWnd, WM_SHARED_SOCKET_EVENT, FD_ACCEPT | FD_CLOSE);
 
-	cout << "Server initialized and listening on port " << port << endl;
+	string output = "Server initialized and listening on port " + to_string(port) + "\n";
+	cout << output.c_str();
 	return true;
 }
 
