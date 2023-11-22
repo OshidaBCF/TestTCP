@@ -23,6 +23,7 @@ std::vector<zone> zones;
 int currentPainter = zone::painterList::CIRCLE;
 
 void clientHandler(WPARAM wParam);
+void webClientHandler(WPARAM wParam);
 
 struct ClientData {
 	SOCKET clientSocket;
@@ -32,6 +33,7 @@ struct ClientData {
 };
 
 std::vector<ClientData> clients;
+std::vector<ClientData> webClients;
 
 // Implémentation de la fonction de gestion des événements
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
@@ -63,7 +65,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 		break;
 	case EVENT_FOR_WEB:
 		messageMutex.lock();
-
+		webClientHandler(wParam);
 		messageMutex.unlock();
 		break;
 	case GAME_SOCKET_EVENT:
@@ -96,7 +98,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 		break;
 		case FD_READ:
 		{
-			clientHandler((SOCKET)wParam);
+			clientHandler(wParam);
 		}
 		break;
 		case FD_CLOSE:
@@ -118,23 +120,13 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 				break;
 			}
 			WSAAsyncSelect(Accept, hwnd, GAME_SOCKET_EVENT, FD_READ | FD_WRITE | FD_CLOSE);
-			if (clients.size() == 0) {
-				cout << "Player 1 connected!" << endl;
-				clients.emplace_back(Accept, zone::painterList::CIRCLE);
-			}
-			else if (clients.size() == 1) {
-				cout << "Player  2 connected!" << endl;
-				clients.emplace_back(Accept, zone::painterList::CROSS);
-			}
-			else {
-				cout << "Spectator connected!" << endl;
-				clients.emplace_back(Accept, zone::painterList::NONE);
-			}
+			cout << "Web Client connected!" << endl;
+			webClients.emplace_back(Accept, zone::painterList::NONE);
 		}
 		break;
 		case FD_READ:
 		{
-			clientHandler((SOCKET)wParam);
+			webClientHandler(wParam);
 		}
 		break;
 		case FD_CLOSE:
@@ -295,7 +287,7 @@ void handleMove(ClientData& clientData, char* buf, std::vector<zone> &zones) {
 void clientHandler(WPARAM wParam) {
 	for (int i = 0; i < clients.size(); i++)
 	{
-		if (clients[i].clientSocket != wParam)
+		if (clients[i].clientSocket != (SOCKET)wParam)
 		{
 			continue;
 		}
@@ -322,9 +314,6 @@ void clientHandler(WPARAM wParam) {
 
 		// Appeler la fonction pour gérer les mouvements du joueur
 		handleMove(clients[i], buf, zones);
-
-		// Fermer le socket du client lorsque la communication est terminée
-		// closesocket(socket);
 	}
 
 	return;
@@ -385,7 +374,7 @@ DWORD WINAPI serverMain(LPVOID lpParam) {
 			zones.push_back(newZone);
 		}
 	}
-	// Do something at some point iguess
+
 	MSG msg;
 	while (GetMessage(&msg, NULL, 0, 0)) 
 	{
@@ -399,7 +388,6 @@ DWORD WINAPI serverMain(LPVOID lpParam) {
 
 	return 0;
 }
-
 
 bool initializeWebServer(SOCKET& listeningSocket, sockaddr_in& hint, int port, HWND hWnd) {
 	// Initialisation de Winsock
@@ -441,6 +429,36 @@ bool initializeWebServer(SOCKET& listeningSocket, sockaddr_in& hint, int port, H
 
 	cout << "Server initialized and listening on port " << port << endl;
 	return true;
+}
+
+void webClientHandler(WPARAM wParam)
+{
+	SOCKET clientWebSocket = (SOCKET)wParam;
+
+	char buf[4096];
+	ZeroMemory(buf, sizeof(buf));
+
+	int byteReceived = recv(clientWebSocket, buf, sizeof(buf), 0);
+	if (byteReceived == SOCKET_ERROR) {
+		cerr << "Error in recv(). Quitting\n";
+		return;
+	}
+
+	if (byteReceived == 0) {
+		cout << "Client is disconnected!" << endl;
+		return;
+	}
+
+	// cout << "Received from WebServer : " << buf << endl;
+
+	// Message à afficher dans la fenêtre web
+	string webMessage = "<html><body><h1>Bienvenue sur le serveur de jeu</h1></body></html>";
+
+	// Répondre à la requête avec un message HTML
+	string response = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n";
+	response += webMessage;
+
+	send(clientWebSocket, response.c_str(), response.size(), 0);
 }
 
 // Fonction pour le serveur web
@@ -486,24 +504,11 @@ DWORD WINAPI webServer(LPVOID lpParam) {
 		return 0; // Quitter le thread en cas d'échec de l'initialisation
 	}
 
-	// Message à afficher dans la fenêtre web
-	string webMessage = "<html><body><h1>Bienvenue sur le serveur de jeu</h1></body></html>";
-
-	// Boucle de gestion des requêtes web
-	while (true) {
-		SOCKET clientWebSocket = accept(webSocket, nullptr, nullptr);
-		if (clientWebSocket != INVALID_SOCKET) {
-			cout << "Web client connected!\n";
-
-			// Répondre à la requête avec un message HTML
-			string response = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n";
-			response += webMessage;
-
-			send(clientWebSocket, response.c_str(), response.size(), 0);
-
-			// Fermer la connexion avec le client web
-			closesocket(clientWebSocket);
-		}
+	MSG msg;
+	while (GetMessage(&msg, NULL, 0, 0))
+	{
+		TranslateMessage(&msg);
+		DispatchMessage(&msg);
 	}
 
 	// Fermeture du serveur web
