@@ -454,13 +454,43 @@ void webClientHandler(WPARAM wParam)
 	// cout << "Received from WebServer : " << buf << endl;
 
 	// Message à afficher dans la fenêtre web
-	string webMessage = "<html><body><h1>Bienvenue sur le serveur de jeu</h1></body></html>";
+	string webMessage = R"(
+    <html>
+    <head>
+        <title>Game Server</title>
+		<meta http-equiv="refresh" content="1" />
+        <style>
+            body {
+                background-color: lightgray;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                height: 100vh;
+                margin: 0;
+                font-family: Arial, sans-serif;
+            }
+            .message {
+                background-color: white;
+                padding: 20px;
+                border-radius: 5px;
+                box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            }
+        </style>
+    </head>
+    <body>
+        <div class="message">
+            <h1>Bienvenue sur le webServeur de jeu</h1>
+        </div>
+    </body>
+    </html>
+	)";
 
 	// Répondre à la requête avec un message HTML
 	string response = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n";
 	response += webMessage;
 
 	send(clientWebSocket, response.c_str(), response.size(), 0);
+	closesocket(clientWebSocket);
 }
 
 // Fonction pour le serveur web
