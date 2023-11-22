@@ -118,14 +118,14 @@ bool initializeServer(SOCKET& listeningSocket, sockaddr_in& hint, int port, HWND
 	WORD ver = MAKEWORD(2, 2);
 	int wsOk = WSAStartup(ver, &wsData);
 	if (wsOk != 0) {
-		cerr << "Can't Initialize winsock! Quitting..." << endl;
-		return false;
+		cerr << "Can't Initialize winsock! Quitting...\n";
+		return 1;
 	}
 
 	// Création du socket
 	listeningSocket = socket(AF_INET, SOCK_STREAM, 0);
 	if (listeningSocket == INVALID_SOCKET) {
-		cerr << "Can't create a socket! Quitting..." << endl;
+		cerr << "Can't create a socket! Quitting...\n";
 		return false;
 	}
 
@@ -136,14 +136,14 @@ bool initializeServer(SOCKET& listeningSocket, sockaddr_in& hint, int port, HWND
 
 	// Liaison du socket
 	if (bind(listeningSocket, (sockaddr*)&hint, sizeof(hint)) == SOCKET_ERROR) {
-		cerr << "Can't bind to IP/port! Quitting..." << endl;
+		cerr << "Can't bind to IP/port! Quitting...\n";
 		closesocket(listeningSocket);
 		return false;
 	}
 
 	// Mise en écoute du socket
 	if (listen(listeningSocket, SOMAXCONN) == SOCKET_ERROR) {
-		cerr << "Can't listen on socket! Quitting..." << endl;
+		cerr << "Can't listen on socket! Quitting...\n";
 		closesocket(listeningSocket);
 		return false;
 	}
@@ -177,11 +177,11 @@ void checkWinner(vector<zone>& zones, SOCKET clientSocket) {
 		// Envoi d'un message au client indiquant le gagnant
 		if (winner == zone::painterList::CIRCLE) {
 			send(clientSocket, "W1", 3, 0); // Message indiquant la victoire du cercle
-			cout << "Player 1 wins!" << endl;
+			cout << "Player 1 wins!\n";
 		}
 		else if (winner == zone::painterList::CROSS) {
 			send(clientSocket, "W2", 3, 0); // Message indiquant la victoire de la croix
-			cout << "Player 2 wins!" << endl;
+			cout << "Player 2 wins!\n";
 		}
 	}
 }
@@ -268,7 +268,7 @@ void clientHandler(WPARAM wParam) {
 
 		int byteReceived = recv(socket, buf, sizeof(buf), 0);
 		if (byteReceived == SOCKET_ERROR) {
-			cerr << "Error in recv(). Quitting" << endl;
+			cerr << "Error in recv(). Quitting\n";
 			break;
 		}
 
@@ -279,7 +279,7 @@ void clientHandler(WPARAM wParam) {
 		}
 
 		// Traitement des données reçues du client
-		cout << "Received from client: " << buf << endl;
+		cout << "Received from client: " << buf << "\n";
 
 		// Appeler la fonction pour gérer les mouvements du joueur
 		handleMove(clients[i], buf, zones);
@@ -363,47 +363,41 @@ DWORD WINAPI serverMain(LPVOID lpParam) {
 
 // Fonction pour le serveur web
 DWORD WINAPI webServer(LPVOID lpParam) {
-	// Creation de la window class
-	HINSTANCE hInstance = GetModuleHandle(NULL);
-
-	// Définir la classe de la fenêtre
-	WNDCLASS windowClass = {};
-	windowClass.lpfnWndProc = WindowProc;
-	windowClass.hInstance = hInstance;
-	windowClass.lpszClassName = L"MyHiddenWindowClass";
-
-	// Enregistrer la classe de fenêtre
-	RegisterClass(&windowClass);
-
-	// Créer la fenêtre cachée
-	HWND hiddenWindow = CreateWindowEx(
-		0,                              // Styles étendus
-		L"MyHiddenWindowClass",        // Nom de la classe
-		L"MyHiddenWindow",              // Titre de la fenêtre
-		WS_OVERLAPPEDWINDOW,// Style de la fenêtre (fenêtre cachée)
-		CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
-		NULL, NULL, hInstance, NULL);
-
-	// Vérifier si la fenêtre a été créée avec succès
-	if (hiddenWindow == NULL) {
-		MessageBox(NULL, L"Erreur lors de la création de la fenêtre cachée.", L"Erreur", MB_ICONERROR);
-		return 1;
-	}
-
-	// Afficher la fenêtre cachée (si nécessaire)
-	//ShowWindow(hiddenWindow, SW_SHOWNORMAL);
-
-	// Lancer la boucle de messages
-	MSG msg = {};
-	while (GetMessage(&msg, NULL, 0, 0)) {
-		TranslateMessage(&msg);
-		DispatchMessage(&msg);
-	}
-
-
 	cout << "Web Server thread running...\n";
-	// Mettez ici le code du serveur web
-	// Il peut gérer les requêtes HTTP pour afficher l'état du jeu sur un navigateur
+
+	SOCKET webSocket;
+	sockaddr_in webHint;
+	char buf[4096];
+
+	// Initialisation du serveur web
+	if (!initializeServer(webSocket, webHint, 5005)) {
+		return 0; // Quitter le thread en cas d'échec de l'initialisation
+	}
+
+	// Message à afficher dans la fenêtre web
+	string message = "<html><body><h1>Bienvenue sur le serveur de jeu</h1></body></html>";
+
+	// Boucle de gestion des requêtes web
+	while (true) {
+		SOCKET clientWebSocket = accept(webSocket, nullptr, nullptr);
+		if (clientWebSocket != INVALID_SOCKET) {
+			cout << "Web client connected!\n";
+
+			// Répondre à la requête avec un message HTML
+			string response = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n";
+			response += message;
+
+			send(clientWebSocket, response.c_str(), response.size(), 0);
+
+			// Fermer la connexion avec le client web
+			closesocket(clientWebSocket);
+		}
+	}
+
+	// Fermeture du serveur web
+	closesocket(webSocket);
+	WSACleanup();
+
 	return 0;
 }
 
@@ -441,13 +435,13 @@ int main() {
 	// Gestion Threads
 	HANDLE serverThread = CreateThread(NULL, 0, serverMain, NULL, CREATE_NO_WINDOW, NULL);
 	if (serverThread == NULL) {
-		cerr << "Failed to create server thread!" << endl;
+		cerr << "Failed to create server thread!\n";
 		return 1;
 	}
 
 	HANDLE webThread = CreateThread(NULL, 0, webServer, NULL, CREATE_NO_WINDOW, NULL);
 	if (webThread == NULL) {
-		cerr << "Failed to create web server thread!" << endl;
+		cerr << "Failed to create web server thread!\n";
 		return 1;
 	}
 
