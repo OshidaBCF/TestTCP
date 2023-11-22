@@ -181,7 +181,7 @@ bool initializeGameServer(SOCKET& listeningSocket, sockaddr_in& hint, int port, 
 
 	WSAAsyncSelect(listeningSocket, hWnd, GAME_SOCKET_EVENT, FD_ACCEPT | FD_CLOSE);
 
-	string output = "Server initialized and listening on port " + to_string(port) + "\n";
+	string output = "Game Server initialized and listening on port " + to_string(port) + "\n";
 	cout << output.c_str();
 	return true;
 }
@@ -350,9 +350,9 @@ DWORD WINAPI serverMain(LPVOID lpParam) {
 	}
 
 	// Afficher la fenêtre cachée (si nécessaire)
-	//ShowWindow(hiddenWindow, SW_SHOWNORMAL);
+	// ShowWindow(hiddenWindow, SW_SHOWNORMAL);
 
-	cout << "Server Main thread running...\n";
+	// cout << "Server Main thread running...\n";
 	
 	// Déclaration des variables pour le serveur
 	SOCKET listening;
@@ -428,7 +428,8 @@ bool initializeWebServer(SOCKET& listeningSocket, sockaddr_in& hint, int port, H
 
 	WSAAsyncSelect(listeningSocket, hWnd, WEB_SOCKET_EVENT, FD_ACCEPT | FD_CLOSE);
 
-	cout << "Server initialized and listening on port " << port << endl;
+	string output = "Web Server initialized and listening on port " + to_string(port) + "\n";
+	cout << output.c_str();
 	return true;
 }
 
@@ -492,9 +493,9 @@ DWORD WINAPI webServer(LPVOID lpParam) {
 	}
 
 	// Afficher la fenêtre cachée (si nécessaire)
-	//ShowWindow(hiddenWindow, SW_SHOWNORMAL);
+	// ShowWindow(hiddenWindow, SW_SHOWNORMAL);
 
-	cout << "Web Server thread running...\n";
+	// cout << "Web Server thread running...\n";
 
 	SOCKET webSocket;
 	sockaddr_in webHint;
@@ -563,16 +564,8 @@ int main() {
 		return 1;
 	}
 
-	cout << "Main thread running...\n";
-	// Logique du thread principal (interface utilisateur, traitement supplémentaire, etc.)
-	// recv message
-	// put message in mutex
-	// send event to serverThread
-	// recv event from serverThread
-	// get message from mutex
-	// send message to client(s)
-	// send event to webThread
-
+	// cout << "Main thread running...\n";
+	
 	// Attendre la fin des threads avant de terminer
 	WaitForSingleObject(serverThread, INFINITE);
 	WaitForSingleObject(webThread, INFINITE);
