@@ -35,6 +35,14 @@ struct ClientData {
 std::vector<ClientData> clients;
 std::vector<ClientData> webClients;
 
+void sendClients(string input)
+{
+	for (int i = 0; i < clients.size(); i++)
+	{
+		send(clients[i].clientSocket, input.c_str(), input.length(), 0);
+	}
+}
+
 // Implémentation de la fonction de gestion des événements
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 	SOCKET Accept;
@@ -106,6 +114,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 			break;
 		}
 	}
+	break;
 	case WEB_SOCKET_EVENT:
 	{
 		switch (WSAGETSELECTEVENT(lParam))
@@ -208,11 +217,11 @@ void checkWinner(vector<zone>& zones, SOCKET clientSocket) {
 
 		// Envoi d'un message au client indiquant le gagnant
 		if (winner == zone::painterList::CIRCLE) {
-			send(clientSocket, "W1", 3, 0); // Message indiquant la victoire du cercle
+			sendClients("W1"); // Message indiquant la victoire du cercle
 			cout << "Player 1 wins!\n";
 		}
 		else if (winner == zone::painterList::CROSS) {
-			send(clientSocket, "W2", 3, 0); // Message indiquant la victoire de la croix
+			sendClients("W2"); // Message indiquant la victoire du cercle
 			cout << "Player 2 wins!\n";
 		}
 	}
@@ -260,10 +269,7 @@ void handleMove(ClientData& clientData, char* buf, std::vector<zone> &zones) {
 				}
 			}
 			cout << responce << endl;
-			for (int i = 0; i < clients.size(); i++)
-			{
-				send(clients[i].clientSocket, responce.c_str(), responce.length(), 0);
-			}
+			sendClients(responce);
 
 			// Vérification du gagnant après chaque mouvement
 			checkWinner(zones, clientSocket);
@@ -451,7 +457,7 @@ void webClientHandler(WPARAM wParam)
 		return;
 	}
 
-	// cout << "Received from WebServer : " << buf << endl;
+	cout << "Received from WebServer : " << buf << endl;
 
 	// Message à afficher dans la fenêtre web
 	string webMessage = "<html><body><h1>Bienvenue sur le serveur de jeu</h1></body></html>";
@@ -461,6 +467,7 @@ void webClientHandler(WPARAM wParam)
 	response += webMessage;
 
 	send(clientWebSocket, response.c_str(), response.size(), 0);
+	closesocket(clientWebSocket);
 }
 
 // Fonction pour le serveur web
