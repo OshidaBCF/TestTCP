@@ -18,16 +18,16 @@ using namespace std;
 std::string message;
 std::mutex messageMutex;
 
+std::vector<zone> zones;
+int currentPainter = zone::painterList::CIRCLE;
 
-void clientHandler();
+void clientHandler(WPARAM wParam);
 
 struct ClientData {
 	SOCKET clientSocket;
-	std::vector<zone> zones;
 	int painter;
-	int winner;
 
-	ClientData(SOCKET socket) : clientSocket(socket), painter(zone::painterList::CIRCLE), winner(0) {}
+	ClientData(SOCKET socket, int painter) : clientSocket(socket), painter(painter) {}
 };
 
 std::vector<ClientData> clients;
@@ -56,7 +56,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 		break;
 	case EVENT_FOR_GAME:
 		messageMutex.lock();
-		clientHandler();
+		clientHandler(wParam);
 		messageMutex.unlock();
 		PostMessage(hwnd, EVENT_FOR_WEB, wParam, lParam);
 		break;
@@ -74,51 +74,28 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 			if ((Accept = accept(wParam, NULL, NULL)) == INVALID_SOCKET)
 			{
 				printf("accept() failed with error %d\n", WSAGetLastError());
+				closesocket(wParam);
+				WSACleanup();
 				break;
 			}
-			else
-				printf("accept() is OK!\n");
-
-			WSAAsyncSelect(Accept, hwnd, WM_SHARED_SOCKET_EVENT, FD_READ | FD_WRITE | FD_CLOSE);
-	
-
-			/*//----------------------
-			// Accept the connection.
-			AcceptSocket = accept(listeningSocket, NULL, NULL);
-			if (AcceptSocket == INVALID_SOCKET) {
-				wprintf(L"accept failed with error: %ld\n", WSAGetLastError());
-				closesocket(listeningSocket);
-				WSACleanup();
-				return 1;
+			WSAAsyncSelect(Accept, hwnd, WM_SHARED_SOCKET_EVENT, FD_READ | FD_WRITE | (1 << 5));
+			if (clients.size() == 0) {
+				cout << "Player 1 connected!" << endl;
+				clients.emplace_back(Accept, zone::painterList::CIRCLE);
 			}
-			else
-			{
-				clients.emplace_back(AcceptSocket);
-				// Ici, vous pouvez gérer la logique pour les spectateurs et les joueurs dans le même thread
-				// Par exemple, examinez si un joueur est déjà connecté, puis assignez le nouveau client comme spectateur
-				if (clients.size() <= 2) {
-					cout << "Player connected!" << endl; // Message lorsque qu'un joueur se connecte
-					// Traitez les joueurs
-					// Assignez le joueur et initiez le jeu si nécessaire
-				}
-				else {
-					cout << "Spectator connected!" << endl; // Message lorsque qu'un joueur se connecte
-					// Traitez les spectateurs
-					// Affichez l'état actuel du jeu ou d'autres informations pertinentes aux spectateurs
-				}
-			}*/
+			else if (clients.size() == 1) {
+				cout << "Player  2 connected!" << endl;
+				clients.emplace_back(Accept, zone::painterList::CROSS);
+			}
+			else {
+				cout << "Spectator connected!" << endl;
+				clients.emplace_back(Accept, zone::painterList::NONE);
+			}
 		}
 		break;
 		case FD_READ:
 		{
-			SOCKET data_socket = (SOCKET)wParam;
-			char buf[4096];
-			ZeroMemory(buf, 4096);
-			int BytesReceived = recv(data_socket, buf, 4096, 0);
-			if (BytesReceived)
-			{
-				// Rien
-			}
+			clientHandler((SOCKET)wParam);
 		}
 		break;
 		case FD_CLOSE:
@@ -149,7 +126,6 @@ bool initializeServer(SOCKET& listeningSocket, sockaddr_in& hint, int port, HWND
 	listeningSocket = socket(AF_INET, SOCK_STREAM, 0);
 	if (listeningSocket == INVALID_SOCKET) {
 		cerr << "Can't create a socket! Quitting..." << endl;
-		WSACleanup();
 		return false;
 	}
 
@@ -162,7 +138,6 @@ bool initializeServer(SOCKET& listeningSocket, sockaddr_in& hint, int port, HWND
 	if (bind(listeningSocket, (sockaddr*)&hint, sizeof(hint)) == SOCKET_ERROR) {
 		cerr << "Can't bind to IP/port! Quitting..." << endl;
 		closesocket(listeningSocket);
-		WSACleanup();
 		return false;
 	}
 
@@ -170,7 +145,6 @@ bool initializeServer(SOCKET& listeningSocket, sockaddr_in& hint, int port, HWND
 	if (listen(listeningSocket, SOMAXCONN) == SOCKET_ERROR) {
 		cerr << "Can't listen on socket! Quitting..." << endl;
 		closesocket(listeningSocket);
-		WSACleanup();
 		return false;
 	}
 
@@ -180,10 +154,10 @@ bool initializeServer(SOCKET& listeningSocket, sockaddr_in& hint, int port, HWND
 	return true;
 }
 
-void checkWinner(vector<zone>& zones, int& winner, SOCKET clientSocket) {
+void checkWinner(vector<zone>& zones, SOCKET clientSocket) {
 	// Vérification du gagnant selon les règles du jeu
 	// Vérifiez si l'une des combinaisons gagnantes est remplie
-
+	int winner = 0;
 	// 0 1 2
 	// 3 4 5
 	// 6 7 8
@@ -210,99 +184,108 @@ void checkWinner(vector<zone>& zones, int& winner, SOCKET clientSocket) {
 			cout << "Player 2 wins!" << endl;
 		}
 	}
-	else {
-		// Si aucun gagnant, vous pouvez envoyer un message pour continuer le jeu ou indiquer qu'il n'y a pas encore de gagnant
-		// Exemple : 
-		send(clientSocket, "NoWinnerYet", 12, 0);
-		cout << "No winner yet!" << endl;
-	}
 }
 
-void handleMove(ClientData& clientData, char* buf) {
+void handleMove(ClientData& clientData, char* buf, std::vector<zone> &zones) {
 	SOCKET clientSocket = clientData.clientSocket;
-	std::vector<zone>& zones = clientData.zones;
-	int& painter = clientData.painter;
-	int& winner = clientData.winner;
+	int painter = clientData.painter;
 
-	ZeroMemory(buf, 4096);
-
-	int byteReceived = recv(clientSocket, buf, 4096, 0);
-	if (byteReceived == SOCKET_ERROR) {
-		cerr << "Error in recv(). Quitting" << endl;
-		return;
+	string responce;
+	if (buf[0] == 'Q')
+	{
+		responce = "Q";
+		responce += to_string(painter);
+		cout << responce << endl;
+		send(clientSocket, responce.c_str(), responce.length(), 0);
 	}
 
-	if (byteReceived == 0) {
-		cout << "Client is disconnected!" << endl;
-		return;
+	if (buf[0] == 'S')
+	{
+		responce = "S";
+		for (int j = 0; j < 3; j++)
+		{
+			for (int i = 0; i < 3; i++)
+			{
+				responce += to_string(zones[i + j * 3].painter);
+			}
+		}
+		cout << responce << endl;
+		send(clientSocket, responce.c_str(), responce.length(), 0);
 	}
-
-	cout << buf << endl;
 
 	Vector2i position;
 	if (buf[0] == 'P') {
-		if (int(buf[1]) - '0' == painter) {
+		if (int(buf[1]) - '0' == currentPainter) {
 			position = Vector2i(int(buf[3]) - '0', int(buf[5]) - '0');
-			string userInput = "P" + to_string(painter) + "X" + to_string(position.x) + "Y" + to_string(position.y);
-			zones[position.x + position.y * 3].painter = painter;
-			send(clientSocket, userInput.c_str(), userInput.size() + 1, 0);
+			string userInput = "P" + to_string(currentPainter) + "X" + to_string(position.x) + "Y" + to_string(position.y);
+			zones[position.x + position.y * 3].painter = currentPainter;
+			responce = "S";
+			for (int j = 0; j < 3; j++)
+			{
+				for (int i = 0; i < 3; i++)
+				{
+					responce += to_string(zones[i + j * 3].painter);
+				}
+			}
+			cout << responce << endl;
+			for (int i = 0; i < clients.size(); i++)
+			{
+				send(clients[i].clientSocket, responce.c_str(), responce.length(), 0);
+			}
 
 			// Vérification du gagnant après chaque mouvement
-			checkWinner(zones, winner, clientSocket);
+			checkWinner(zones, clientSocket);
 
 			// Changement de joueur après un mouvement valide
-			if (painter == zone::painterList::CIRCLE) {
-				painter = zone::painterList::CROSS;
+			if (currentPainter == zone::painterList::CIRCLE) {
+				currentPainter = zone::painterList::CROSS;
 			}
 			else {
-				painter = zone::painterList::CIRCLE;
+				currentPainter = zone::painterList::CIRCLE;
 			}
 		}
 		else {
 			// Envoyer un message indiquant que c'est au tour de l'autre joueur
-			string message = "Not your turn, current player: " + to_string(painter);
+			string message = "Not your turn, current player: " + to_string(currentPainter);
 			send(clientSocket, message.c_str(), message.size() + 1, 0);
-			cout << "Not your turn, current player: " << painter << endl;
+			cout << "Not your turn, current player: " << currentPainter << endl;
 		}
 	}
 }
 
-void clientHandler() {
+void clientHandler(WPARAM wParam) {
 	for (int i = 0; i < clients.size(); i++)
 	{
-		SOCKET clientSocket = clients[i].clientSocket;
-		std::vector<zone> zones = clients[i].zones;
+		if (clients[i].clientSocket != wParam)
+		{
+			continue;
+		}
+		SOCKET socket = clients[i].clientSocket;
 		int painter = clients[i].painter;
-		int winner = clients[i].winner;
-
-		// Message pour indiquer qu'un client s'est connecté
-		cout << "Client connected!" << endl;
 
 		char buf[4096];
-		while (true) {
-			ZeroMemory(buf, sizeof(buf));
+		ZeroMemory(buf, sizeof(buf));
 
-			int byteReceived = recv(clientSocket, buf, sizeof(buf), 0);
-			if (byteReceived == SOCKET_ERROR) {
-				cerr << "Error in recv(). Quitting" << endl;
-				break;
-			}
-
-			if (byteReceived == 0) {
-				cout << "Client is disconnected!" << endl;
-				// TODO remove client from clientlist
-				break;
-			}
-
-			// Traitement des données reçues du client
-			cout << "Received from client: " << buf << endl;
-
-			// Appeler la fonction pour gérer les mouvements du joueur
-			handleMove(clients[i], buf);
+		int byteReceived = recv(socket, buf, sizeof(buf), 0);
+		if (byteReceived == SOCKET_ERROR) {
+			cerr << "Error in recv(). Quitting" << endl;
+			break;
 		}
 
+		if (byteReceived == 0) {
+			cout << "Client is disconnected!" << endl;
+			clients.erase(clients.begin() + i);
+			break;
+		}
+
+		// Traitement des données reçues du client
+		cout << "Received from client: " << buf << endl;
+
+		// Appeler la fonction pour gérer les mouvements du joueur
+		handleMove(clients[i], buf, zones);
+
 		// Fermer le socket du client lorsque la communication est terminée
-		closesocket(clientSocket);
+		// closesocket(socket);
 	}
 
 	return;
@@ -352,40 +335,23 @@ DWORD WINAPI serverMain(LPVOID lpParam) {
 		return 0; // Quitter le thread en cas d'échec de l'initialisation
 	}
 
-	std::vector<zone> zones;
 	int painter = zone::painterList::CIRCLE;
 	int winner = 0;
 
+	for (int j = 0; j < 3; j++)
+	{
+		for (int i = 0; i < 3; i++)
+		{
+			zone newZone(Vector2i(i * 300, j * 300));
+			zones.push_back(newZone);
+		}
+	}
 	// Do something at some point iguess
 	MSG msg;
-	DWORD Ret;
-	while (Ret = GetMessage(&msg, NULL, 0, 0))
+	while (GetMessage(&msg, NULL, 0, 0)) 
 	{
-
-		if (Ret == -1)
-
-		{
-
-			printf("\nGetMessage() failed with error %d\n", GetLastError());
-
-			return 1;
-
-		}
-
-		else
-
-			printf("\nGetMessage() is pretty fine!\n");
-
-
-
-		printf("Translating a message...\n");
-
 		TranslateMessage(&msg);
-
-		printf("Dispatching a message...\n");
-
 		DispatchMessage(&msg);
-
 	}
 
 	// Fermeture du serveur
