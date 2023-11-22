@@ -90,18 +90,33 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 				break;
 			}
 			WSAAsyncSelect(Accept, hwnd, GAME_SOCKET_EVENT, FD_READ | FD_WRITE | FD_CLOSE);
+			string responce = "";
 			if (clients.size() == 0) {
 				cout << "Player 1 connected!" << endl;
+				responce += "Q1";
 				clients.emplace_back(Accept, zone::painterList::CIRCLE);
 			}
 			else if (clients.size() == 1) {
 				cout << "Player  2 connected!" << endl;
+				responce += "Q2";
 				clients.emplace_back(Accept, zone::painterList::CROSS);
 			}
 			else {
 				cout << "Spectator connected!" << endl;
+				responce += "Q0";
 				clients.emplace_back(Accept, zone::painterList::NONE);
 			}
+			responce += "S";
+			for (int j = 0; j < 3; j++)
+			{
+				for (int i = 0; i < 3; i++)
+				{
+					responce += to_string(zones[i + j * 3].painter);
+				}
+			}
+			cout << responce << endl;
+			send(Accept, responce.c_str(), responce.length(), 0);
+
 		}
 		break;
 		case FD_READ:
