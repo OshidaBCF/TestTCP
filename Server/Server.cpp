@@ -25,6 +25,9 @@ int currentPainter = zone::painterList::CIRCLE;
 void clientHandler(WPARAM wParam);
 void webClientHandler(WPARAM wParam);
 
+string pseudo1;
+string pseudo2;
+
 struct ClientData {
 	SOCKET clientSocket;
 	int painter;
@@ -315,6 +318,23 @@ void clientHandler(WPARAM wParam) {
 
 		// Traitement des données reçues du client
 		cout << "Received from client: " << buf << "\n";
+
+		if (buf[0] == 'M')
+		{
+			for (int i = 2; i < byteReceived; i++)
+			{
+				if (int(buf[1]) - '0' == zone::painterList::CIRCLE)
+					pseudo1 += buf[i];
+				else
+					pseudo2 += buf[i];
+			}
+			string message;
+			if (int(buf[1]) - '0' == zone::painterList::CIRCLE)
+				message = "M" + to_string(painter) + pseudo1;
+			else
+				message = "M" + to_string(painter) + pseudo2;
+			sendClients(message);
+		}
 
 		// Appeler la fonction pour gérer les mouvements du joueur
 		handleMove(clients[i], buf, zones);
