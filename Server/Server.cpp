@@ -19,6 +19,13 @@ using namespace std;
 string webVariableString;
 mutex webVariableStringMutex;
 
+void AddToWebString(string str)
+{
+	webVariableStringMutex.lock();
+	webVariableString += str;
+	webVariableStringMutex.unlock();
+}
+
 vector<zone> zones;
 int currentPainter = zone::painterList::CIRCLE;
 
@@ -197,12 +204,8 @@ string checkWinner() {
 	// Vérification du gagnant selon les règles du jeu
 	// Vérifiez si l'une des combinaisons gagnantes est remplie
 	int winner = 0;
-	// 0 1 2
-	// 3 4 5
-	// 6 7 8
 	
 	// 0,1,2  3,4,5  6,7,8  0,3,6  1,4,7  2,5,8  0,4,8  2,4,6
-
 	int winConditions[8][3] = {{0,1,2}, {3,4,5}, {6,7,8}, {0,3,6}, {1,4,7}, {2,5,8}, {0,4,8}, {2,4,6}};
 
 	for (int i = 0; i < 8; i++)
@@ -218,21 +221,26 @@ string checkWinner() {
 			// Envoi d'un message au client indiquant le gagnant
 			if (winner == zone::painterList::CIRCLE) {
 				cout << pseudo1 +" wins!\n";
-				webVariableStringMutex.lock();
-				webVariableString += "Player " + pseudo1 + " Win!\n";
-				webVariableStringMutex.unlock();
+				AddToWebString("Player " + pseudo1 + " Win!\n");
 				return "W1"; // Message indiquant la victoire du cercle
 			}
 			if (winner == zone::painterList::CROSS) {
 				cout << pseudo2 + " wins!\n";
-				webVariableStringMutex.lock();
-				webVariableString += "Player " + pseudo2 + " Win!\n";
-				webVariableStringMutex.unlock();
+				AddToWebString("Player " + pseudo2 + " Win!\n");
 				return "W2"; // Message indiquant la victoire des croix
 			}
 		}
+
+
 	}
-	return "";
+	for (int i = 0; i < 9; i++)
+	{
+		if (zones[i].painter == 0)
+			return "";
+	}
+	cout << "It's a draw!\n";
+	AddToWebString("It's a draw!\n");
+	return "W0";
 }
 
 void handleMove(ClientData& clientData, char* buf, std::vector<zone> &zones) {
@@ -254,9 +262,7 @@ void handleMove(ClientData& clientData, char* buf, std::vector<zone> &zones) {
 			position = Vector2i(int(buf[3]) - '0', int(buf[5]) - '0');
 			string userInput = "P" + to_string(currentPainter) + "X" + to_string(position.x) + "Y" + to_string(position.y);
 
-			webVariableStringMutex.lock();
-			webVariableString += "Player " + to_string(currentPainter) + " played on : " + "X = " + to_string(position.x) + " Y = " + to_string(position.y) + "\n";
-			webVariableStringMutex.unlock();
+			AddToWebString("Player " + to_string(currentPainter) + " played on : " + "X = " + to_string(position.x) + " Y = " + to_string(position.y) + "\n");
 
 			zones[position.x + position.y * 3].painter = currentPainter;
 			responce = "S";
@@ -330,12 +336,10 @@ void clientHandler(WPARAM wParam) {
 					pseudo2 += buf[i];
 			}
 
-			webVariableStringMutex.lock();
 			if (int(buf[1]) - '0' == zone::painterList::CIRCLE)
-				webVariableString += "Player 1 connected as " + pseudo1 + "!\n";
+				AddToWebString("Player 1 connected as " + pseudo1 + "!\n");
 			else
-				webVariableString += "Player 2 connected as " + pseudo2 + "!\n";
-			webVariableStringMutex.unlock();
+				AddToWebString("Player 2 connected as " + pseudo2 + "!\n");
 
 			message = "M" + to_string(painter) + pseudo1 + "\rM" + to_string(painter) + pseudo2;
 			sendClients(message);
