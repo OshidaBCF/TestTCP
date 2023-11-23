@@ -210,36 +210,40 @@ bool initializeGameServer(SOCKET& listeningSocket, sockaddr_in& hint, int port, 
 	return true;
 }
 
-void checkWinner(vector<zone>& zones, SOCKET clientSocket) {
+string checkWinner() {
 	// Vérification du gagnant selon les règles du jeu
 	// Vérifiez si l'une des combinaisons gagnantes est remplie
 	int winner = 0;
 	// 0 1 2
 	// 3 4 5
 	// 6 7 8
+	
 	// 0,1,2  3,4,5  6,7,8  0,3,6  1,4,7  2,5,8  0,4,8  2,4,6
-	if ((zones[0].painter != 0 && zones[0].painter == zones[1].painter && zones[0].painter == zones[2].painter) ||
-		(zones[3].painter != 0 && zones[3].painter == zones[4].painter && zones[3].painter == zones[5].painter) ||
-		(zones[6].painter != 0 && zones[6].painter == zones[7].painter && zones[6].painter == zones[8].painter) ||
-		(zones[0].painter != 0 && zones[0].painter == zones[3].painter && zones[0].painter == zones[6].painter) ||
-		(zones[1].painter != 0 && zones[1].painter == zones[4].painter && zones[1].painter == zones[7].painter) ||
-		(zones[2].painter != 0 && zones[2].painter == zones[5].painter && zones[2].painter == zones[8].painter) ||
-		(zones[0].painter != 0 && zones[0].painter == zones[4].painter && zones[0].painter == zones[8].painter) ||
-		(zones[2].painter != 0 && zones[2].painter == zones[4].painter && zones[2].painter == zones[6].painter))
-	{
-		// S'il y a un gagnant
-		winner = zones[0].painter; // Assumons que le gagnant est le joueur de la zone[0]
 
-		// Envoi d'un message au client indiquant le gagnant
-		if (winner == zone::painterList::CIRCLE) {
-			sendClients("W1"); // Message indiquant la victoire du cercle
-			cout << "Player 1 wins!\n";
-		}
-		else if (winner == zone::painterList::CROSS) {
-			sendClients("W2"); // Message indiquant la victoire des croix
-			cout << "Player 2 wins!\n";
+	int winConditions[8][3] = {{0,1,2}, {3,4,5}, {6,7,8}, {0,3,6}, {1,4,7}, {2,5,8}, {0,4,8}, {2,4,6}};
+
+	for (int i = 0; i < 8; i++)
+	{
+		int zone0 = winConditions[i][0];
+		int zone1 = winConditions[i][1];
+		int zone2 = winConditions[i][2];
+
+		if (zones[zone0].painter != 0 && zones[zone0].painter == zones[zone1].painter && zones[zone0].painter == zones[zone2].painter) {
+			// S'il y a un gagnant
+			winner = zones[zone0].painter; // Assumons que le gagnant est le joueur de la zone[0]
+
+			// Envoi d'un message au client indiquant le gagnant
+			if (winner == zone::painterList::CIRCLE) {
+				cout << "Circles wins!\n";
+				return "W1"; // Message indiquant la victoire du cercle
+			}
+			if (winner == zone::painterList::CROSS) {
+				cout << "Cross wins!\n";
+				return "W2"; // Message indiquant la victoire des croix
+			}
 		}
 	}
+	return "";
 }
 
 void handleMove(ClientData& clientData, char* buf, std::vector<zone> &zones) {
@@ -261,11 +265,11 @@ void handleMove(ClientData& clientData, char* buf, std::vector<zone> &zones) {
 					responce += to_string(zones[i + j * 3].painter);
 				}
 			}
-			cout << responce << endl;
-			sendClients(responce);
 
 			// Vérification du gagnant après chaque mouvement
-			checkWinner(zones, clientSocket);
+			responce += checkWinner();
+			cout << responce << endl;
+			sendClients(responce);
 
 			// Changement de joueur après un mouvement valide
 			if (currentPainter == zone::painterList::CIRCLE) {
@@ -357,6 +361,7 @@ DWORD WINAPI serverMain(LPVOID lpParam) {
 	SOCKET listening;
 	sockaddr_in hint;
 	char buf[4096];
+	ZeroMemory(buf, sizeof(buf));
 
 	// Initialisation du serveur
 	if (!initializeGameServer(listening, hint, 5004, hiddenWindow)) {
@@ -536,6 +541,7 @@ DWORD WINAPI webServer(LPVOID lpParam) {
 	SOCKET webSocket;
 	sockaddr_in webHint;
 	char buf[4096];
+	ZeroMemory(buf, sizeof(buf));
 
 	// Initialisation du serveur web
 	if (!initializeWebServer(webSocket, webHint, 5005, hiddenWindow)) {
