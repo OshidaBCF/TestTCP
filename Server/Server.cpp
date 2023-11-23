@@ -115,7 +115,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 				}
 			}
 			cout << responce << endl;
-			send(Accept, responce.c_str(), responce.length(), 0);
+			send(Accept, responce.c_str(), responce.size(), 0);
 
 		}
 		break;
@@ -143,8 +143,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 				WSACleanup();
 				break;
 			}
-			WSAAsyncSelect(Accept, hwnd, GAME_SOCKET_EVENT, FD_READ | FD_WRITE | FD_CLOSE);
-			cout << "Web Client connected!" << endl;
+			WSAAsyncSelect(Accept, hwnd, WEB_SOCKET_EVENT, FD_READ | FD_WRITE | FD_CLOSE);
+			// cout << "Web Client connected!" << endl;
 			webClients.emplace_back(Accept, zone::painterList::NONE);
 		}
 		break;
@@ -247,28 +247,6 @@ void handleMove(ClientData& clientData, char* buf, std::vector<zone> &zones) {
 	int painter = clientData.painter;
 
 	string responce;
-	if (buf[0] == 'Q')
-	{
-		responce = "Q";
-		responce += to_string(painter);
-		cout << responce << endl;
-		send(clientSocket, responce.c_str(), responce.length(), 0);
-	}
-
-	if (buf[0] == 'S')
-	{
-		responce = "S";
-		for (int j = 0; j < 3; j++)
-		{
-			for (int i = 0; i < 3; i++)
-			{
-				responce += to_string(zones[i + j * 3].painter);
-			}
-		}
-		cout << responce << endl;
-		send(clientSocket, responce.c_str(), responce.length(), 0);
-	}
-
 	Vector2i position;
 	if (buf[0] == 'P') {
 		if (int(buf[1]) - '0' == currentPainter) {
@@ -300,7 +278,7 @@ void handleMove(ClientData& clientData, char* buf, std::vector<zone> &zones) {
 		else {
 			// Envoyer un message indiquant que c'est au tour de l'autre joueur
 			string message = "N" + to_string(currentPainter);
-			send(clientSocket, message.c_str(), message.size() + 1, 0);
+			send(clientSocket, message.c_str(), message.size(), 0);
 			cout << "Not your turn, current player: " << currentPainter << endl;
 		}
 	}
@@ -472,17 +450,17 @@ void webClientHandler(WPARAM wParam)
 		return;
 	}
 
-	cout << "Received from WebServer : " << buf << endl;
+	// cout << "Received from WebServer : " << buf << endl;
 
 	// Message à afficher dans la fenêtre web
 	string webMessage = R"(
     <html>
     <head>
         <title>Game Server</title>
-		<meta http-equiv="refresh" content="1" />
+		<meta http-equiv="refresh" content="2" />
         <style>
             body {
-                background-color: lightgray;
+                background-color: #323336;
                 display: flex;
                 justify-content: center;
                 align-items: center;
@@ -512,6 +490,13 @@ void webClientHandler(WPARAM wParam)
 
 	send(clientWebSocket, response.c_str(), response.size(), 0);
 	closesocket(clientWebSocket);
+	for (int i = 0; i < webClients.size(); i++)
+	{
+		if (webClients[i].clientSocket == clientWebSocket)
+		{
+			webClients.erase(webClients.begin() + i);
+		}
+	}
 }
 
 // Fonction pour le serveur web
