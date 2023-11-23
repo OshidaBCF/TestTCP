@@ -16,10 +16,10 @@ using namespace std;
 #define GAME_SOCKET_EVENT  (WM_USER + 4)
 #define WEB_SOCKET_EVENT   (WM_USER + 5)
 
-std::string message;
-std::mutex messageMutex;
+string webVariableString;
+mutex webVariableStringMutex;
 
-std::vector<zone> zones;
+vector<zone> zones;
 int currentPainter = zone::painterList::CIRCLE;
 
 void clientHandler(WPARAM wParam);
@@ -58,26 +58,6 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 	case WM_DESTROY:
 		// Gérer la destruction de la fenêtre
 		PostQuitMessage(0);
-		break;
-	case EVENT_FOR_MAIN:
-		messageMutex.lock();
-		for (int i = 0; i < clients.size(); i++)
-		{
-			send(clients[i].clientSocket, message.c_str(), message.size() + 1, 0);
-		}
-		messageMutex.unlock();
-		PostMessage(hwnd, EVENT_FOR_WEB, wParam, lParam);
-		break;
-	case EVENT_FOR_GAME:
-		messageMutex.lock();
-		clientHandler(wParam);
-		messageMutex.unlock();
-		PostMessage(hwnd, EVENT_FOR_WEB, wParam, lParam);
-		break;
-	case EVENT_FOR_WEB:
-		messageMutex.lock();
-		webClientHandler(wParam);
-		messageMutex.unlock();
 		break;
 	case GAME_SOCKET_EVENT:
 	{
@@ -237,11 +217,17 @@ string checkWinner() {
 
 			// Envoi d'un message au client indiquant le gagnant
 			if (winner == zone::painterList::CIRCLE) {
-				cout << "Circles wins!\n";
+				cout << pseudo1 +" wins!\n";
+				webVariableStringMutex.lock();
+				webVariableString += "Player " + pseudo1 + " Win!\n";
+				webVariableStringMutex.unlock();
 				return "W1"; // Message indiquant la victoire du cercle
 			}
 			if (winner == zone::painterList::CROSS) {
-				cout << "Cross wins!\n";
+				cout << pseudo2 + " wins!\n";
+				webVariableStringMutex.lock();
+				webVariableString += "Player " + pseudo2 + " Win!\n";
+				webVariableStringMutex.unlock();
 				return "W2"; // Message indiquant la victoire des croix
 			}
 		}
@@ -256,9 +242,22 @@ void handleMove(ClientData& clientData, char* buf, std::vector<zone> &zones) {
 	string responce;
 	Vector2i position;
 	if (buf[0] == 'P') {
+		if (pseudo1 == "" || pseudo2 == "")
+		{
+			// Envoyer un message indiquant que c'est au tour de l'autre joueur
+			string message = "N0";
+			send(clientSocket, message.c_str(), message.size(), 0);
+			cout << "You cannot play yet, second player hasn't joined: " << currentPainter << endl;
+			return;
+		}
 		if (int(buf[1]) - '0' == currentPainter) {
 			position = Vector2i(int(buf[3]) - '0', int(buf[5]) - '0');
 			string userInput = "P" + to_string(currentPainter) + "X" + to_string(position.x) + "Y" + to_string(position.y);
+
+			webVariableStringMutex.lock();
+			webVariableString += "Player " + to_string(currentPainter) + " played on : " + "X = " + to_string(position.x) + " Y = " + to_string(position.y) + "\n";
+			webVariableStringMutex.unlock();
+
 			zones[position.x + position.y * 3].painter = currentPainter;
 			responce = "S";
 			for (int j = 0; j < 3; j++)
@@ -321,6 +320,7 @@ void clientHandler(WPARAM wParam) {
 
 		if (buf[0] == 'M')
 		{
+			string message;
 			message = "";
 			for (int i = 2; i < byteReceived; i++)
 			{
@@ -329,6 +329,14 @@ void clientHandler(WPARAM wParam) {
 				else
 					pseudo2 += buf[i];
 			}
+
+			webVariableStringMutex.lock();
+			if (int(buf[1]) - '0' == zone::painterList::CIRCLE)
+				webVariableString += "Player 1 connected as " + pseudo1 + "!\n";
+			else
+				webVariableString += "Player 2 connected as " + pseudo2 + "!\n";
+			webVariableStringMutex.unlock();
+
 			message = "M" + to_string(painter) + pseudo1 + "\rM" + to_string(painter) + pseudo2;
 			sendClients(message);
 		}
@@ -474,36 +482,77 @@ void webClientHandler(WPARAM wParam)
 
 	// cout << "Received from WebServer : " << buf << endl;
 
+	webVariableStringMutex.lock();
+	string temp;
+	string webVar;
+	for (int i = 0; i < webVariableString.size(); i++)
+	{
+		if (webVariableString[i] != '\n') {
+			// Append the char to the temp string.
+			temp += webVariableString[i];
+		}
+		else {
+			webVar += "<div>" + temp +"</div>";
+			temp.clear();
+		}
+	}
+	webVariableStringMutex.unlock();
 	// Message à afficher dans la fenêtre web
 	string webMessage = R"(
     <html>
-    <head>
-        <title>Game Server</title>
-		<meta http-equiv="refresh" content="2" />
-        <style>
-            body {
-                background-color: #323336;
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                height: 100vh;
-                margin: 0;
-                font-family: Arial, sans-serif;
-            }
-            .message {
-                background-color: white;
-                padding: 20px;
-                border-radius: 5px;
-                box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-            }
-        </style>
-    </head>
-    <body>
-        <div class="message">
-            <h1>Bienvenue sur le webServeur de jeu</h1>
-        </div>
-    </body>
-    </html>
+		<head>
+			<title>Game Server</title>
+			<meta http-equiv="refresh" content="1" />
+			<style>
+				body {
+					background-color: lightgray;
+					display: flex;
+					flex-direction: column;
+					align-items: center;
+					height: 100vh;
+					margin: 0;
+					font-family: Arial, sans-serif;
+				}
+				header {
+					background-color: #333;
+					color: white;
+					padding: 15px;
+					text-align: center;
+					width: 100%;
+				}
+				.message {
+					background-color: white;
+					padding: 20px;
+					border-radius: 5px;
+					box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+					margin-top: 20px;
+				}
+				.chat-box {
+					width: 700px;
+					height: 800px;
+					background-color: #fff;
+					border: 1px solid #ccc;
+					border-radius: 8px;
+					overflow: hidden;
+					box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+				}
+				.messagesBox {
+					height: 700px;
+					overflow-y: scroll;
+					padding: 10px;
+				}
+			</style>
+		</head>
+		<body>
+			<header>
+				<h1>TicTacToe Online</h1>
+			</header>
+			<div><h2>Coups jou&#233;s</h2></div>
+			<div class="chat-box">
+				<div class="messagesBox">)" + webVar + R"(				</div>
+			</div>
+		</body>
+	</html>
 	)";
 
 	// Répondre à la requête avec un message HTML
