@@ -236,7 +236,7 @@ void checkWinner(vector<zone>& zones, SOCKET clientSocket) {
 			cout << "Player 1 wins!\n";
 		}
 		else if (winner == zone::painterList::CROSS) {
-			sendClients("W2"); // Message indiquant la victoire du cercle
+			sendClients("W2"); // Message indiquant la victoire des croix
 			cout << "Player 2 wins!\n";
 		}
 	}
@@ -299,7 +299,7 @@ void handleMove(ClientData& clientData, char* buf, std::vector<zone> &zones) {
 		}
 		else {
 			// Envoyer un message indiquant que c'est au tour de l'autre joueur
-			string message = "Not your turn, current player: " + to_string(currentPainter);
+			string message = "N" + to_string(currentPainter);
 			send(clientSocket, message.c_str(), message.size() + 1, 0);
 			cout << "Not your turn, current player: " << currentPainter << endl;
 		}
