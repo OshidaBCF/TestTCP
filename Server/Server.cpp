@@ -321,6 +321,7 @@ void clientHandler(WPARAM wParam) {
 
 		if (buf[0] == 'M')
 		{
+			message = "";
 			for (int i = 2; i < byteReceived; i++)
 			{
 				if (int(buf[1]) - '0' == zone::painterList::CIRCLE)
@@ -328,11 +329,7 @@ void clientHandler(WPARAM wParam) {
 				else
 					pseudo2 += buf[i];
 			}
-			string message;
-			if (int(buf[1]) - '0' == zone::painterList::CIRCLE)
-				message = "M" + to_string(painter) + pseudo1;
-			else
-				message = "M" + to_string(painter) + pseudo2;
+			message = "M" + to_string(painter) + pseudo1 + "\rM" + to_string(painter) + pseudo2;
 			sendClients(message);
 		}
 
