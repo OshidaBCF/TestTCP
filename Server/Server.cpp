@@ -143,7 +143,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 				WSACleanup();
 				break;
 			}
-			WSAAsyncSelect(Accept, hwnd, GAME_SOCKET_EVENT, FD_READ | FD_WRITE | FD_CLOSE);
+			WSAAsyncSelect(Accept, hwnd, WEB_SOCKET_EVENT, FD_READ | FD_WRITE | FD_CLOSE);
 			cout << "Web Client connected!" << endl;
 			webClients.emplace_back(Accept, zone::painterList::NONE);
 		}
